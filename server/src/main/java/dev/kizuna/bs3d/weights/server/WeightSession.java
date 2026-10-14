@@ -43,7 +43,11 @@ final class WeightSession implements ServerModuleSession<ServerPlayerEntity> {
         if (!request.message().equals(WeightMessages.SUBSCRIBE)) {
             return false;
         }
-        request.payload(SubscribeRequest.getDefaultInstance());
+        var subscription = request.payload(SubscribeRequest.getDefaultInstance());
+        // v1 订阅必须为空；把重量、库存或玩家字段塞进未知字段也不能通过校验。
+        if (!subscription.getUnknownFields().asMap().isEmpty()) {
+            return false;
+        }
         subscribed = true;
         publish(true);
         return true;

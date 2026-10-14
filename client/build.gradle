@@ -1,3 +1,6 @@
+// 单机内置服务器复用 server 的权威实现，客户端界面只消费服务器快照。
+sourceSets.main.java.srcDir rootProject.file('server/src/main/java')
+
 dependencies {
     modImplementation files(new File(rootProject.frameworkDir, 'build/libs/kizuna-inventory-ui-framework-0.1.0-SNAPSHOT.jar'))
     modImplementation files(new File(rootProject.bs3dDir, 'client/build/libs/backpack-storage-3d-client-0.1.0-SNAPSHOT.jar'))
@@ -12,6 +15,7 @@ loom.runs {
         source sourceSets.smoke
         runDir "../build/smoke/${rootProject.findProperty('smokeRun') ?: 'manual'}/client"
         property 'weights.smoke.mode', rootProject.findProperty('smokeMode') ?: 'dedicated'
+        property 'weights.smoke.address', "127.0.0.1:${rootProject.findProperty('smokePort') ?: '25583'}"
         programArgs '--username', 'WeightsSmoke', '--width', '1280', '--height', '720'
     }
 }

@@ -41,7 +41,6 @@ subprojects {
     }
     sourceSets.main {
         java.srcDir rootProject.file('shared/src/main/java')
-        java.srcDir rootProject.file('common/src/main/java')
         resources.srcDir rootProject.file('common/src/main/resources')
         proto.srcDir rootProject.file('shared/src/main/proto')
     }

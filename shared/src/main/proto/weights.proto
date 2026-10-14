@@ -3,7 +3,7 @@ package kizuna.bs3d.weights.v1;
 option java_package = "dev.kizuna.bs3d.weights.protocol.pb";
 option java_outer_classname = "WeightsProtocol";
 
-// C2S：订阅自己的重量。不得指定玩家、容器、NBT 或任何重量。
+// C2S：订阅自己的重量。v1 必须为空，未知字段也拒绝；不得指定玩家、容器、NBT 或重量。
 message SubscribeRequest {}
 
 // S2C：完整替换本连接的重量缓存；status 非 OK 时重量字段不可用于显示。

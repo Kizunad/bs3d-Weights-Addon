@@ -4,14 +4,23 @@
 
 ## 配套依赖状态
 
-2026-10-14 已核验两个依赖仓库的公开 `main`：
+2026-10-14 配套源码已推送公开 `main`，本附属已在以下提交上完成 Java 17 构建和单机／独服联调：
 
-| 仓库 | 远端提交 | 当前限制 |
+| 仓库 | 兼容源码提交 | 所需能力 |
 |---|---|---|
-| [Inventory UI Framework](https://github.com/Kizunad/Kizuna-Inventory-UI-Framework) | `1a184a6105a40a44a099a47a87e3d8a46a8d1183` | 尚未包含本附属所需的服务端路由与单机注册 |
-| [Backpack and Storage 3D](https://github.com/Kizunad/backpack-and-storage-3D) | `fd84319e7154a9d70d042d5292037b806f48e853` | 仅有 README 和 LICENSE，Java 实现尚未推送 |
+| [Inventory UI Framework](https://github.com/Kizunad/Kizuna-Inventory-UI-Framework) | [b2f6e30](https://github.com/Kizunad/Kizuna-Inventory-UI-Framework/commit/b2f6e3021c40f052702d48301408b333b3ed378f) | 统一逻辑服务端路由、单机注册与公共 Protobuf |
+| [Backpack and Storage 3D](https://github.com/Kizunad/backpack-and-storage-3D) | [7a54057](https://github.com/Kizunad/backpack-and-storage-3D/commit/7a540577b8f1dea7b541a8f66c1cbf03f8bc96e9) | 权威库存、`InventoryAccess`、`ContainerDetails` 与单机保存 |
 
-本附属的本地验证使用了两个基础仓库尚未提交的实现。所以下列命令要求先取得配套源码，不能声称从当前公开 `main` 克隆后即可运行；也没有可供固定的兼容依赖提交或 Maven 版本。基础源码同步后应更新此表并记录可复现的提交号。
+三个源码仓库放在同级目录。复现本次验证时，先克隆两个依赖并固定提交，再执行下方构建步骤：
+
+```sh
+git clone "https://github.com/Kizunad/Kizuna-Inventory-UI-Framework.git" "Kizuna-Inventory-UI-Framework"
+git -C "Kizuna-Inventory-UI-Framework" checkout b2f6e3021c40f052702d48301408b333b3ed378f
+git clone "https://github.com/Kizunad/backpack-and-storage-3D.git" "backpack-and-storage-3D"
+git -C "backpack-and-storage-3D" checkout 7a540577b8f1dea7b541a8f66c1cbf03f8bc96e9
+```
+
+这些是已验证的源码提交，不是稳定 API 或正式发布版本；没有 Maven 坐标。
 
 ## 从配套源码构建
 

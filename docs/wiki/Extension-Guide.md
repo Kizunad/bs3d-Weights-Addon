@@ -6,7 +6,7 @@
 
 `ContainerDetails.register(Identifier, Provider)` 在客户端初始化时登记短文本。`Provider.summary()` 提供背包页总览文本；`Provider.container(String containerId)` 提供按容器 UUID 查找的短文本。未知容器返回 `Text.empty()`。BS3D 负责排版、裁切和主题，Addon 不接管窗口管理或原版 HUD。
 
-重量逻辑位于 `common/src/main/java`，两端构建共用源码；客户端产物包含内置服务器，专用服务器产物没有客户端类。`shared/src/main/proto` 和 `WeightMessages` 定义消息，不保存客户端猜测值。
+重量逻辑位于 `server/src/main/java`，客户端构建复用这份源码以支持内置服务器；专用服务器产物没有客户端类。`common/src/main/resources` 仅保存两端产物都需携带的服务端默认数据包。`shared/src/main/proto` 和 `WeightMessages` 定义消息，不保存客户端猜测值。
 
 自定义物品重量优先通过[数据包规则](Weight-Rules.md)接入，无须另写 Java 或修改模组。当前没有额外库存类型的递归扩展 API；不要通过读取客户端 NBT 计算权威重量。
 

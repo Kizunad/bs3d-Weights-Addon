@@ -1,11 +1,14 @@
 package dev.kizuna.bs3d.weights.smoke;
 
+import com.google.protobuf.UnknownFieldSet;
 import dev.kizuna.backpack3d.client.VolumeModule;
 import dev.kizuna.backpack3d.client.VolumeScreen;
 import dev.kizuna.backpack3d.protocol.Volumes;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Phase;
 import dev.kizuna.bs3d.weights.client.WeightsClient;
+import dev.kizuna.bs3d.weights.protocol.WeightMessages;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.Status;
+import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.SubscribeRequest;
 import dev.kizuna.inventoryui.client.ClientModule;
 import dev.kizuna.inventoryui.client.InventoryUiClient;
 import net.fabricmc.api.ClientModInitializer;
@@ -31,11 +34,12 @@ import net.minecraft.world.level.LevelInfo;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.util.concurrent.CompletableFuture;
 
 /** 实际独立服务器/单机连接、转移、Protobuf 显示、热重载和重开世界验收。 */
 public final class WeightsSmokeClient implements ClientModInitializer {
     private static final String WORLD = "weights-smoke";
-    private static final String ADDRESS = "127.0.0.1:25583";
+    private static final String ADDRESS = System.getProperty("weights.smoke.address", "127.0.0.1:25583");
     private static final long TIMEOUT_MILLIS = 240_000;
     private static final int SETTLE_TICKS = 15;
     private static final int DISCONNECT_SETTLE_TICKS = SETTLE_TICKS * 2;
@@ -43,6 +47,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private enum Stage {
         CONNECT,
         INITIAL_STATE,
+        AUTHORITY_VERIFIED,
         TRANSFER_STARTED,
         TRANSFER_CANCELLED,
         TRANSFER_COMMITTED,
@@ -59,6 +64,8 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private boolean integrated;
     private String pouch;
     private String oldSession;
+    private long authorityRevision;
+    private CompletableFuture<Boolean> rejectedSubscription;
 
     @Override
     public void onInitializeClient() {
@@ -121,6 +128,27 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 }
                 require(weights.state().getContainersCount() == 3, "没有递归统计三个容器");
                 require(integrated == client.isInSingleplayer(), "运行环境不符合验收要求");
+                // 将伪造的重量值夹在空订阅的未知字段中，必须被逻辑服务器拒绝。
+                authorityRevision = weights.state().getRevision();
+                var forged = SubscribeRequest.newBuilder()
+                        .setUnknownFields(UnknownFieldSet.newBuilder()
+                                .addField(4, UnknownFieldSet.Field.newBuilder().addVarint(0).build())
+                                .build())
+                        .build();
+                rejectedSubscription = InventoryUiClient.runtime().protocol()
+                        .request(WeightMessages.SUBSCRIBE, forged, System.currentTimeMillis())
+                        .thenApply(result -> !result.accepted() && result.code().equals("REJECTED"));
+                stage = Stage.AUTHORITY_VERIFIED;
+            }
+            case AUTHORITY_VERIFIED -> {
+                // 收到拒绝回执后，服务端快照及库存修订都必须保持原值。
+                if (!rejectedSubscription.isDone()) {
+                    return;
+                }
+                require(rejectedSubscription.join(), "服务端接受了带伪造重量字段的订阅");
+                require(weights.state().getRevision() == authorityRevision, "非法请求改变了重量修订");
+                require(weights.state().getTotalGrams() == 5000, "非法请求改变了权威重量");
+                require(volume.state().getRevision() == 1, "非法重量请求改变了库存");
                 pouch = volume.state().getContainersList().stream()
                         .filter(container -> container.getWorn())
                         .findFirst()
@@ -191,7 +219,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     stage = Stage.REOPEN_WORLD;
                     disconnect(client);
                 } else {
-                    finish(client, "dedicated: server weights, nested containers, cancel, commit, reload, protobuf, UI passed");
+                    finish(client, "dedicated: server authority, forged request rejection, nested containers, cancel, commit, reload, protobuf, UI passed");
                 }
             }
             case WORLD_RESTORED -> {

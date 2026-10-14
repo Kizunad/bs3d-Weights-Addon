@@ -13,16 +13,17 @@ ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 300
 POLL_SECONDS = 0.5
 STOP_TIMEOUT_SECONDS = 30
-PORT = 25583
+DEFAULT_PORT = 25583
+MAX_PORT = 65_535
 
 
-def prepare(run):
+def prepare(run, port):
     for side in ("client", "server"):
         (run / side).mkdir(parents=True)
     (run / "client/options.txt").write_text("guiScale:2\nlang:zh_cn\nrenderDistance:2\nmaxFps:60\npauseOnLostFocus:false\n")
     (run / "server/eula.txt").write_text("eula=true\n")
     (run / "server/server.properties").write_text(
-        f"server-ip=127.0.0.1\nserver-port={PORT}\nonline-mode=false\n"
+        f"server-ip=127.0.0.1\nserver-port={port}\nonline-mode=false\n"
         "view-distance=2\nsimulation-distance=2\nmax-players=1\nspawn-protection=0\n"
         "level-type=minecraft:flat\ngenerate-structures=false\ndifficulty=peaceful\n"
         'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},'
@@ -53,10 +54,10 @@ def stop_process_group(process):
         process.wait(timeout=STOP_TIMEOUT_SECONDS)
 
 
-def run_mode(command, mode, run_id):
+def run_mode(command, mode, run_id, port):
     run = ROOT / "build/smoke" / f"{run_id}-{mode}"
-    prepare(run)
-    args = command + [f"-PsmokeRun={run.name}", f"-PsmokeMode={mode}"]
+    prepare(run, port)
+    args = command + [f"-PsmokeRun={run.name}", f"-PsmokeMode={mode}", f"-PsmokePort={port}"]
     server = None
     client_process = None
     with (run / "server.log").open("w") as server_log, (run / "client.log").open("w") as client_log:
@@ -64,7 +65,7 @@ def run_mode(command, mode, run_id):
             if mode == "dedicated":
                 # 端口已占用时失败，不连接或结束用户的现有实例。
                 with socket.socket() as probe:
-                    probe.bind(("127.0.0.1", PORT))
+                    probe.bind(("127.0.0.1", port))
                 server = subprocess.Popen(args + [":server:runSmoke"], cwd=ROOT,
                                           stdout=server_log, stderr=subprocess.STDOUT, start_new_session=True)
                 wait_ready(server, run / "server.log")
@@ -93,14 +94,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--java-home", type=Path, default=Path("/usr/lib/jvm/java-17-openjdk-amd64"))
     parser.add_argument("--mode", choices=["both", "dedicated", "integrated"], default="both")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
+                        help="独服验收端口；已占用时使用其他端口，不处理现有服务器")
     args = parser.parse_args()
+    if not 1 <= args.port <= MAX_PORT:
+        parser.error("--port 必须位于 1..65535")
     # 不复用外部 Gradle 守护进程，让游戏子进程始终属于本次可回收的进程组。
     command = [str(ROOT / "gradlew"), "--offline", "--no-daemon", "--console=plain",
                f"-Dorg.gradle.java.home={args.java_home}"]
     run_id = uuid.uuid4().hex[:12]
     modes = ("dedicated", "integrated") if args.mode == "both" else (args.mode,)
     for mode in modes:
-        print(run_mode(command, mode, run_id), flush=True)
+        print(run_mode(command, mode, run_id, args.port), flush=True)
 
 
 if __name__ == "__main__":

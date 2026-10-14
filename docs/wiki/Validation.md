@@ -1,8 +1,8 @@
 # 验证记录
 
-状态：2026-10-14 初版源码，尚未发布版本；配套基础源码的公开构建限制见[安装指南](Getting-Started.md)。
+状态：2026-10-14 初版源码，尚未发布版本；配套基础源码已公开，兼容提交见[安装指南](Getting-Started.md)。
 
-Java 17 下 `test build` 通过：Addon 19 项测试（服务端 14，客户端 5）；Framework 87 项、BS3D 87 项原有测试通过。
+Java 17 下 `test build` 通过：Addon 20 项测试（服务端 15，客户端 5）；Framework 87 项、BS3D 87 项原有测试通过。
 
 覆盖堆叠/盔甲/副手/光标计重、穿戴/嵌套不重计、最深合法容器中的普通物品、超深拒绝、地面容器排除、损坏与重复身份、int64 边界、零重量、物品和 tag 规则、优先级及字段边界、失败热重载保留旧目录、Protobuf 往返、旧修订拒绝和断线清空。
 
@@ -42,6 +42,16 @@ python3 scripts/wiki.py check
 python3 scripts/smoke.py --java-home "/path/to/jdk17"
 ```
 
-smoke 在全新 `build/smoke/<run-id>-<mode>/` 创建世界，使用端口 25583，仅 Linux Xvfb 自动运行。它会生成物品、测试计时转移与取消、通过数据包热重载改重量，并在完成后正常退出。测试源码不打入生产 JAR，不能用它替代玩家手动体验。
+smoke 在全新 `build/smoke/<run-id>-<mode>/` 创建世界，默认端口 25583，仅 Linux Xvfb 自动运行。端口冲突时可通过 `--port` 改用其他端口，客户端与独服统一使用该值；不连接或停止占用端口的现有服务器。它会生成物品、测试计时转移与取消、通过数据包热重载改重量，并在完成后正常退出。测试源码不打入生产 JAR，不能用它替代玩家手动体验。
+
+## 服务端权威校验
+
+2026-10-14 将权威实现归入 `server/src/main/java`，客户端构建复用该源码以支持内置服务器；客户端展示层没有本地计重或上报重量入口。生产端分别包含服务端计算类，两端 JAR 不含 smoke 夹具，专服 JAR 不含客户端／owo 类。
+
+- 新增路由测试绕过客户端校验，直接发送伪造的 C2S `WeightState(total_grams=0)`；真实 `ServerRouter` 返回 `INVALID_DIRECTION`，业务处理器调用次数为 0，随后合法订阅仍被接受。
+- 真实 Fabric 独服和单机均发送携带伪造重量未知字段的 `SubscribeRequest`，返回 `REJECTED`；权威总重仍为 5 kg，重量修订号和库存修订号不变。
+- 继续完成转移取消、提交、嵌套计重、服务端数据包热重载及 UI 显示；单机同世界重开验证新连接会话和旧 level.dat 恢复。
+
+本轮完整证据为 `build/smoke/164141707dc2-dedicated/`、`build/smoke/164141707dc2-integrated/`，两者 `client/weights-ok.txt` 均通过，客户端和独服正常保存退出。默认端口当时被其他进程占用，复验使用 `--port 25584`，保留原进程。三个仓库的 Wiki 检查通过；未启动或更新 Windows Native 实例。
 
 文档与构建入口见[安装指南](Getting-Started.md)。
