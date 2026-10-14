@@ -11,6 +11,6 @@ Backpack and Storage 3D 的独立重量附属，MIT 许可。服务端计算，�
 
 当前为 `0.1.0-SNAPSHOT` 源码，尚未发布版本，API 尚未冻结。需要支持单机和附属接口的 Framework、BS3D 产物，旧同名 SNAPSHOT 不兼容。
 
-配套 Framework、BS3D 源码已同步公开。按[安装构建](docs/wiki/Getting-Started.md)中的兼容提交，依次构建三个仓库；尚无正式 Release 或 Maven 坐标。
+配套 Framework、BS3D 源码已公开。当前接口要求与已验证的兼容提交见[安装构建](docs/wiki/Getting-Started.md)，请按其说明依次构建三个仓库；尚无正式 Release 或 Maven 坐标。
 
 接入文档唯一来源为 [docs/wiki](docs/wiki/Home.md)：[安装构建](docs/wiki/Getting-Started.md)、[重量规则](docs/wiki/Weight-Rules.md)、[Protobuf 契约](docs/wiki/Protocol.md)、[扩展边界](docs/wiki/Extension-Guide.md)、[验证记录](docs/wiki/Validation.md)。

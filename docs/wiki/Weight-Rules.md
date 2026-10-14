@@ -1,5 +1,28 @@
 # 数据包重量规则
 
+## 物品注册字段
+
+2026-10-14 源码已实现并验证 BS3D `optional` 字段接入，尚无正式发布版本。逻辑服务器先按物品类型读取 `bs3d_weights:weight`，其值为 `{"grams": 250}` 这样的 JSON 对象；`grams` 表示每件物品的自重，必须为 0..1,000,000,000 的 JSON 整数。容器内容仍由服务器递归计算，不在该字段中填入内容总重。
+
+注册阶段示例（需要当前包含 `ItemMetadata` 的 BS3D 源码产物）：
+
+```java
+var weight = new JsonObject();
+weight.addProperty("grams", 1200);
+ItemMetadata.register(
+        Items.IRON_SWORD,
+        "item.example.iron_sword.description",
+        Map.of(new Identifier("bs3d_weights", "weight"), weight));
+```
+
+新容器使用 `ContainerItems.register` 最后的必填 `optional` 参数；不要在注册容器后重复补登记同一物品。通用字段表与描述的接口、资源准备和迁移说明见 BS3D 的物品扩展文档。BS3D 不依赖本附属，注册方可以使用字段 ID 字符串接入，无须引用附属类。
+
+匹配顺序固定为：**合法注册字段 → 数据包规则 → 默认 100 克**。仅匹配完整命名空间 `bs3d_weights:weight`，不匹配别的附属同名字段，也不读取物品 NBT 中的 `optional` 或客户端上报值。字段已合法注册时，数据包不会覆盖它；需要保留管理员数据包配置能力的类型可显式传空字段表。
+
+缺少字段时记录包含物品 ID、字段 ID 和回退方式的 WARN；无效字段同样警告，并包含校验失败原因，随后按上述回退顺序继续。每个物品类型在一次成功规则加载周期内只警告一次，成功 `/reload` 后重新检查；失败重载保留原规则和告警缓存。未携带或未参与计算的物品、空栈不告警。内置 BS3D 容器使用空字段表，因此保留现有演示自重并产生一次缺字段诊断。
+
+## 数据包回退规则
+
 规则只安装在逻辑服务器：专用服务器放入世界的 `datapacks/`，单机放入 `saves/<世界>/datapacks/`。启用后用 `/reload` 生效，客户端无须相同文件。
 
 数据包的 `pack.mcmeta` 使用 Minecraft 1.20.1 的 `pack_format: 15`。在 `data/example/bs3d_weights/weights/iron_sword.json` 中配置：
@@ -18,7 +41,7 @@
 
 `grams` 是每件物品的自重，必须是 0..1,000,000,000 的 JSON 整数，堆叠时乘以真实数量。`priority` 是 int32 整数，默认 0；越大越优先，同级按完整资源 ID 排序。ID 规则和 tag 规则共用此顺序，不额外隐式加权。相同资源路径由原版数据包覆盖规则决定。任一规则读取失败保留上一份完整目录，并记录文件及字段错误。
 
-内置规则是可替换的演示值：
+未配置注册重量的类型使用以下内置规则作为可替换的演示值：
 
 | 物品 | 单件自重 |
 |---|---|

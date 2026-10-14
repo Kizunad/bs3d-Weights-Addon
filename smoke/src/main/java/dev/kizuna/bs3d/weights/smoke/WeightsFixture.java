@@ -1,12 +1,15 @@
 package dev.kizuna.bs3d.weights.smoke;
 
+import com.google.gson.JsonObject;
 import dev.kizuna.backpack3d.item.ContainerItems;
+import dev.kizuna.backpack3d.item.ItemMetadata;
 import dev.kizuna.backpack3d.protocol.StackCodec;
 import dev.kizuna.backpack3d.protocol.Volumes;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Item;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.PlayerAccount;
+import dev.kizuna.bs3d.weights.server.WeightRules;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -21,6 +24,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** 只存在于 smoke 源集的服务器夹具，不进入生产 JAR。 */
@@ -30,6 +34,9 @@ public final class WeightsFixture implements ModInitializer {
     @Override
     public void onInitialize() {
         // 单机与专用服务端共用夹具；数据始终由实际服务器玩家及库存事务创建。
+        var weight = new JsonObject();
+        weight.addProperty("grams", 375);
+        ItemMetadata.register(Items.GOLD_INGOT, "", Map.of(WeightRules.WEIGHT_FIELD, weight));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> seedInventory(handler.player));
         CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> {
             dispatcher.register(CommandManager.literal("weights-fixture-reload")
@@ -65,6 +72,7 @@ public final class WeightsFixture implements ModInitializer {
         }
         slots.set(0, new ItemStack(Items.STONE, 2));
         slots.set(1, basket);
+        slots.set(2, new ItemStack(Items.GOLD_INGOT, 2));
         var worn = ContainerItems.create(ContainerItems.POUCH);
         var data = account.data().toBuilder()
                 .setRevision(1)

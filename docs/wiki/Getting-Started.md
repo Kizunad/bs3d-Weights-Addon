@@ -9,7 +9,7 @@
 | 仓库 | 兼容源码提交 | 所需能力 |
 |---|---|---|
 | [Inventory UI Framework](https://github.com/Kizunad/Kizuna-Inventory-UI-Framework) | [b2f6e30](https://github.com/Kizunad/Kizuna-Inventory-UI-Framework/commit/b2f6e3021c40f052702d48301408b333b3ed378f) | 统一逻辑服务端路由、单机注册与公共 Protobuf |
-| [Backpack and Storage 3D](https://github.com/Kizunad/backpack-and-storage-3D) | [7a54057](https://github.com/Kizunad/backpack-and-storage-3D/commit/7a540577b8f1dea7b541a8f66c1cbf03f8bc96e9) | 权威库存、`InventoryAccess`、`ContainerDetails` 与单机保存 |
+| [Backpack and Storage 3D](https://github.com/Kizunad/backpack-and-storage-3D) | [6a09d7a](https://github.com/Kizunad/backpack-and-storage-3D/commit/6a09d7ade862f5741a581f890dbc7ae4c4dfde05) | 权威库存、`InventoryAccess`、`ContainerDetails`、物品描述与 `ItemMetadata` 附属字段 |
 
 三个源码仓库放在同级目录。复现本次验证时，先克隆两个依赖并固定提交，再执行下方构建步骤：
 
@@ -17,14 +17,16 @@
 git clone "https://github.com/Kizunad/Kizuna-Inventory-UI-Framework.git" "Kizuna-Inventory-UI-Framework"
 git -C "Kizuna-Inventory-UI-Framework" checkout b2f6e3021c40f052702d48301408b333b3ed378f
 git clone "https://github.com/Kizunad/backpack-and-storage-3D.git" "backpack-and-storage-3D"
-git -C "backpack-and-storage-3D" checkout 7a540577b8f1dea7b541a8f66c1cbf03f8bc96e9
+git -C "backpack-and-storage-3D" checkout 6a09d7ade862f5741a581f890dbc7ae4c4dfde05
 ```
 
 这些是已验证的源码提交，不是稳定 API 或正式发布版本；没有 Maven 坐标。
 
+本次物品 `optional` 重量支持要求 BS3D 包含 `ItemMetadata` 和八参数 `ContainerItems.register`。上表中的 BS3D 提交已包含这些入口；两端都须使用由该提交构建的产物，旧的同名 SNAPSHOT JAR 不满足依赖要求。Framework 本次无改动，继续使用表中的兼容提交。
+
 ## 从配套源码构建
 
-先构建包含单机支持的 Framework，再构建包含 `InventoryAccess` 和 `ContainerDetails` 的 BS3D，最后构建本仓库：
+先构建包含单机支持的 Framework，再构建包含 `InventoryAccess`、`ContainerDetails` 和 `ItemMetadata` 的 BS3D，最后构建本仓库：
 
 ```sh
 # 在 Framework 仓库运行

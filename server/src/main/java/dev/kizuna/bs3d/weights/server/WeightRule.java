@@ -41,10 +41,7 @@ record WeightRule(
         } else {
             tag = TagKey.of(RegistryKeys.ITEM, identifier(json, "tag"));
         }
-        long grams = integer(json, "grams");
-        if (grams < 0 || grams > MAX_UNIT_GRAMS) {
-            throw new IllegalArgumentException("grams 必须在 0.." + MAX_UNIT_GRAMS + " 克之间");
-        }
+        long grams = grams(json);
         int priority = 0;
         if (json.has("priority")) {
             long configured = integer(json, "priority");
@@ -54,6 +51,15 @@ record WeightRule(
             priority = (int) configured;
         }
         return new WeightRule(resource, item, tag, grams, priority);
+    }
+
+    static long grams(JsonObject json) {
+        // 注册字段与数据包采用同一单位和边界，不能因配置入口不同而绕过校验。
+        long grams = integer(json, "grams");
+        if (grams < 0 || grams > MAX_UNIT_GRAMS) {
+            throw new IllegalArgumentException("grams 必须在 0.." + MAX_UNIT_GRAMS + " 克之间");
+        }
+        return grams;
     }
 
     private static Identifier identifier(JsonObject json, String field) {

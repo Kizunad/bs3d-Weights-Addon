@@ -1,6 +1,7 @@
 package dev.kizuna.bs3d.weights.smoke;
 
 import com.google.protobuf.UnknownFieldSet;
+import dev.kizuna.backpack3d.item.ItemMetadata;
 import dev.kizuna.backpack3d.client.VolumeModule;
 import dev.kizuna.backpack3d.client.VolumeScreen;
 import dev.kizuna.backpack3d.protocol.Volumes;
@@ -23,6 +24,7 @@ import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.client.item.TooltipContext;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.world.Difficulty;
@@ -31,6 +33,7 @@ import net.minecraft.world.GameRules;
 import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
+import net.minecraft.text.Text;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -43,6 +46,10 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private static final long TIMEOUT_MILLIS = 240_000;
     private static final int SETTLE_TICKS = 15;
     private static final int DISCONNECT_SETTLE_TICKS = SETTLE_TICKS * 2;
+    // 随身树原有 5 kg，加上通过 optional 注册的两件 375 g 金锭。
+    private static final long INITIAL_TOTAL_GRAMS = 5750;
+    // 数据包重载只改变三块石头的重量，注册金锭的自重保持不变。
+    private static final long RELOADED_TOTAL_GRAMS = 8750;
 
     private enum Stage {
         CONNECT,
@@ -122,8 +129,8 @@ public final class WeightsSmokeClient implements ClientModInitializer {
         client.getToastManager().clear();
         switch (stage) {
             case INITIAL_STATE -> {
-                // 初始树由服务端夹具创建：三只容器，随身合计 5 kg。
-                if (weights.state().getTotalGrams() != 5000) {
+                // 初始树来自真实服务端库存，包含通过 optional 字段登记的金锭重量。
+                if (weights.state().getTotalGrams() != INITIAL_TOTAL_GRAMS) {
                     return;
                 }
                 require(weights.state().getContainersCount() == 3, "没有递归统计三个容器");
@@ -147,13 +154,20 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 }
                 require(rejectedSubscription.join(), "服务端接受了带伪造重量字段的订阅");
                 require(weights.state().getRevision() == authorityRevision, "非法请求改变了重量修订");
-                require(weights.state().getTotalGrams() == 5000, "非法请求改变了权威重量");
+                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "非法请求改变了权威重量");
                 require(volume.state().getRevision() == 1, "非法重量请求改变了库存");
                 pouch = volume.state().getContainersList().stream()
                         .filter(container -> container.getWorn())
                         .findFirst()
                         .orElseThrow()
                         .getId();
+                var stack = volume.stack(pouch);
+                String descriptionKey = ItemMetadata.of(stack).descriptionTranslationKey();
+                require(!descriptionKey.isEmpty(), "草包没有登记描述键");
+                String description = Text.translatable(descriptionKey).getString();
+                require(!description.equals(descriptionKey), "物品描述缺少当前语言资源");
+                require(stack.getTooltip(client.player, TooltipContext.BASIC).stream()
+                        .anyMatch(line -> line.getString().equals(description)), "原版 tooltip 没有追加注册描述");
                 volume.open();
                 ((VolumeScreen) client.currentScreen).openContainer(pouch);
                 volume.deposit(volume.playerSlot(0), pouch, Volumes.cell(0, 0, 0), true, 0);
@@ -164,7 +178,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 if (volume.state().getTransfer().getPhase() != Phase.RUNNING) {
                     return;
                 }
-                require(weights.state().getTotalGrams() == 5000, "转移中总重提前改变");
+                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "转移中总重提前改变");
                 volume.cancel();
                 stage = Stage.TRANSFER_CANCELLED;
             }
@@ -174,7 +188,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     return;
                 }
                 require(volume.state().getRevision() == 1, "取消改变了库存修订");
-                require(weights.state().getTotalGrams() == 5000, "取消改变了重量");
+                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "取消改变了重量");
                 volume.deposit(volume.playerSlot(0), pouch, Volumes.cell(0, 0, 0), true, 0);
                 stage = Stage.TRANSFER_COMMITTED;
             }
@@ -190,16 +204,16 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 if (detail.getTotalGrams() != 2250) {
                     return;
                 }
-                require(weights.state().getTotalGrams() == 5000, "容器间转移重复计重");
+                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "容器间转移重复计重");
                 client.getNetworkHandler().sendChatCommand("weights-fixture-reload");
                 stage = Stage.RULES_RELOADED;
             }
             case RULES_RELOADED -> {
                 // 重载后等待 UI 稳定再截图，记录旧会话供重开验证。
-                if (weights.state().getTotalGrams() != 8000) {
+                if (weights.state().getTotalGrams() != RELOADED_TOTAL_GRAMS) {
                     return;
                 }
-                require(weights.summary().getString().contains("8 kg"), "显示没有使用服务端快照");
+                require(weights.summary().getString().contains("8.75 kg"), "显示没有使用服务端快照");
                 require(weights.container(pouch).getString().equals("4.25 kg"), "容器文字重量错误");
                 settle++;
                 if (settle < SETTLE_TICKS) {
@@ -219,14 +233,14 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     stage = Stage.REOPEN_WORLD;
                     disconnect(client);
                 } else {
-                    finish(client, "dedicated: server authority, forged request rejection, nested containers, cancel, commit, reload, protobuf, UI passed");
+                    finish(client, "dedicated: optional weight registration, item description tooltip, server authority, forged request rejection, nested containers, cancel, commit, reload, protobuf, UI passed");
                 }
             }
             case WORLD_RESTORED -> {
                 // 新会话须读取已提交 playerdata，不能被较旧的 level.dat 回滚。
                 require(!oldSession.equals(weights.state().getSession()), "重开世界沿用了旧连接");
                 require(volume.state().getRevision() == 2, "较旧 level.dat 回滚了库存事务");
-                require(weights.state().getTotalGrams() == 8000, "单机重开重量没有恢复");
+                require(weights.state().getTotalGrams() == RELOADED_TOTAL_GRAMS, "单机重开重量没有恢复");
                 finish(client, "integrated: all dedicated checks plus world restart, stale level.dat recovery, new session passed");
             }
             default -> { }
