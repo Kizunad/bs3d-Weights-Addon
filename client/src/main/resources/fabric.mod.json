@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "bs3d_weights_addon",
+  "version": "${version}",
+  "name": "BS3D Weights Addon",
+  "environment": "client",
+  "authors": [
+    "Kizunad"
+  ],
+  "license": "MIT",
+  "entrypoints": {
+    "main": [
+      "dev.kizuna.bs3d.weights.server.WeightsServer"
+    ],
+    "kizuna_inventory_ui_server": [
+      "dev.kizuna.bs3d.weights.server.WeightsServer"
+    ],
+    "kizuna_inventory_ui": [
+      "dev.kizuna.bs3d.weights.client.WeightsClient"
+    ]
+  },
+  "depends": {
+    "java": ">=17",
+    "minecraft": "1.20.1",
+    "fabricloader": ">=0.16.10",
+    "fabric-api": ">=0.92.3+1.20.1",
+    "backpack_storage_3d": "0.1.0-SNAPSHOT",
+    "kizuna_inventory_ui": "0.1.0-SNAPSHOT"
+  }
+}

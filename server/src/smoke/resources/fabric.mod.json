@@ -1,0 +1,4 @@
+{
+  "schemaVersion": 1, "id": "bs3d_weights_smoke", "version": "1.0.0", "environment": "server",
+  "entrypoints": {"main": ["dev.kizuna.bs3d.weights.smoke.WeightsFixture"]}
+}

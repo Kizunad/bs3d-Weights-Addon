@@ -1,0 +1,30 @@
+syntax = "proto3";
+package kizuna.bs3d.weights.v1;
+option java_package = "dev.kizuna.bs3d.weights.protocol.pb";
+option java_outer_classname = "WeightsProtocol";
+
+// C2S：订阅自己的重量。不得指定玩家、容器、NBT 或任何重量。
+message SubscribeRequest {}
+
+// S2C：完整替换本连接的重量缓存；status 非 OK 时重量字段不可用于显示。
+message WeightState {
+  string session = 1; // Framework 连接身份；换世界或重连后变化。
+  int64 revision = 2; // 本连接单调递增，与 BS3D 库存修订号独立。
+  Status status = 3;
+  int64 total_grams = 4; // 原版库存（含盔甲/副手）、光标栈与穿戴根容器重量；不含地面容器。
+  repeated ContainerWeight containers = 5;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  OK = 1;
+  INVALID_INVENTORY = 2; // 不完整、重复身份或溢出时明确不可用，不返回部分总重。
+}
+
+message ContainerWeight {
+  string container_id = 1; // 容器实例 UUID，不是注册物品类型 ID。
+  string title = 2; // 服务端物品展示名。
+  int64 contents_grams = 3; // 包含嵌套容器自重及内容。
+  int64 total_grams = 4; // 此容器自重 + contents_grams。
+  bool carried = 5; // 地面容器及其子容器为 false，不计入随身总重。
+}
