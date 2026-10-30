@@ -70,8 +70,10 @@ public final class WeightsClient implements ClientModule, ContainerDetails.Provi
     @Override
     public Text summary() {
         // 未同步或计算失败时不显示 0 kg，避免把未知重量误认为空背包。
-        return switch (view.state().getStatus()) {
-            case OK -> Text.literal("随身重量 " + WeightView.kilograms(view.state().getTotalGrams()));
+        var state = view.state();
+        return switch (state.getStatus()) {
+            case OK -> Text.literal("实重 " + WeightView.kilograms(state.getTotalGrams())
+                    + " / 负重 " + WeightView.kilograms(state.getEffectiveGrams()));
             case INVALID_INVENTORY -> Text.literal("重量暂不可用：库存数据异常");
             default -> Text.literal(status);
         };

@@ -37,6 +37,7 @@ import net.minecraft.text.Text;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /** 实际独立服务器/单机连接、转移、Protobuf 显示、热重载和重开世界验收。 */
@@ -55,8 +56,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
         CONNECT,
         INITIAL_STATE,
         AUTHORITY_VERIFIED,
-        TRANSFER_STARTED,
-        TRANSFER_CANCELLED,
+        TRANSFER_REJECTED,
         TRANSFER_COMMITTED,
         RULES_RELOADED,
         DISCONNECT,
@@ -170,25 +170,17 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                         .anyMatch(line -> line.getString().equals(description)), "原版 tooltip 没有追加注册描述");
                 volume.open();
                 ((VolumeScreen) client.currentScreen).openContainer(pouch);
-                volume.deposit(volume.playerSlot(0), pouch, Volumes.cell(0, 0, 0), true, 0);
-                stage = Stage.TRANSFER_STARTED;
+                // 即时事务没有可取消阶段；改用不存在的物品触发服务端拒绝，验证未提交的转移不改重量。
+                volume.move(UUID.randomUUID().toString(), pouch, Volumes.cell(0, 0, 0), true);
+                stage = Stage.TRANSFER_REJECTED;
             }
-            case TRANSFER_STARTED -> {
-                // 确认转移已开始但尚未改重量，再主动取消。
-                if (volume.state().getTransfer().getPhase() != Phase.RUNNING) {
+            case TRANSFER_REJECTED -> {
+                // 拒绝回执不能增加库存修订或改变重量；随后发起真实转移验证最终提交。
+                if (volume.state().getTransfer().getPhase() != Phase.REJECTED || volume.busy()) {
                     return;
                 }
-                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "转移中总重提前改变");
-                volume.cancel();
-                stage = Stage.TRANSFER_CANCELLED;
-            }
-            case TRANSFER_CANCELLED -> {
-                // 取消不能增加库存修订；重新开始同一操作验证最终提交。
-                if (volume.busy()) {
-                    return;
-                }
-                require(volume.state().getRevision() == 1, "取消改变了库存修订");
-                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "取消改变了重量");
+                require(volume.state().getRevision() == 1, "拒绝改变了库存修订");
+                require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "拒绝改变了重量");
                 volume.deposit(volume.playerSlot(0), pouch, Volumes.cell(0, 0, 0), true, 0);
                 stage = Stage.TRANSFER_COMMITTED;
             }
@@ -233,7 +225,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     stage = Stage.REOPEN_WORLD;
                     disconnect(client);
                 } else {
-                    finish(client, "dedicated: optional weight registration, item description tooltip, server authority, forged request rejection, nested containers, cancel, commit, reload, protobuf, UI passed");
+                    finish(client, "dedicated: optional weight registration, item description tooltip, server authority, forged request rejection, nested containers, reject, commit, reload, protobuf, UI passed");
                 }
             }
             case WORLD_RESTORED -> {

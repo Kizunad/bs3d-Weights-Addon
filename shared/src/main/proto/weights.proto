@@ -13,6 +13,7 @@ message WeightState {
   Status status = 3;
   int64 total_grams = 4; // 原版库存（含盔甲/副手）、光标栈与穿戴根容器重量；不含地面容器。
   repeated ContainerWeight containers = 5;
+  int64 effective_grams = 6; // 按服务端 burden.toml 系数加权的有效负重；Weights 只计数，不据此限制玩家。
 }
 
 enum Status {

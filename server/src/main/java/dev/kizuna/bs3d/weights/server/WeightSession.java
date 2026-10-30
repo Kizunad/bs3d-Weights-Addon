@@ -17,8 +17,8 @@ import java.io.UncheckedIOException;
 /** 每连接独立订阅、去重和修订号，断线后不保留旧世界数据。 */
 final class WeightSession implements ServerModuleSession<ServerPlayerEntity> {
     private static final Logger LOGGER = LoggerFactory.getLogger("bs3d_weights");
-    // 20 TPS 下最多每 250 ms 检查一次；未变化的结果不发包。
-    private static final int UPDATE_INTERVAL_TICKS = 5;
+    // 20 TPS 下最多每 250 ms 检查一次；未变化的结果不发包。Burden API 沿用同一间隔。
+    static final int UPDATE_INTERVAL_TICKS = 5;
     private final MinecraftServer server;
     private final ServerConnection<ServerPlayerEntity> connection;
     private final WeightCalculator calculator;

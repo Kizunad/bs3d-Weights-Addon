@@ -21,7 +21,11 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 class WeightCalculatorTest {
-    private final WeightCalculator calculator = new WeightCalculator(stack -> stack.isOf(Items.STONE) ? 1000 : 250);
+    // 系数全为 1 时有效负重等于实重，本类只验证实重；有效负重的系数表见 BurdenTest。
+    private static final BurdenFactors UNIT_FACTORS = BurdenFactors.parse(
+            "hotbar = 1\nmain = 1\narmor = 1\noffhand = 1\ncursor = 1\nworn_containers = 1\n");
+    private final WeightCalculator calculator = new WeightCalculator(
+            stack -> stack.isOf(Items.STONE) ? 1000 : 250, BurdenSlots.VANILLA, UNIT_FACTORS);
 
     @BeforeAll
     static void bootstrap() {
@@ -91,7 +95,7 @@ class WeightCalculatorTest {
 
     @Test
     void weightsUseInt64WithoutInt32Overflow() {
-        var heavy = new WeightCalculator(stack -> WeightRule.MAX_UNIT_GRAMS);
+        var heavy = new WeightCalculator(stack -> WeightRule.MAX_UNIT_GRAMS, BurdenSlots.VANILLA, UNIT_FACTORS);
         assertEquals(64_000_000_000L, heavy.calculate(snapshot(List.of(new ItemStack(Items.STONE, 64)),
                 List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());
     }
@@ -114,7 +118,7 @@ class WeightCalculatorTest {
 
     @Test
     void emptyAndZeroWeightAreValid() {
-        var zero = new WeightCalculator(stack -> 0);
+        var zero = new WeightCalculator(stack -> 0, BurdenSlots.VANILLA, UNIT_FACTORS);
         assertEquals(0, zero.calculate(
                 snapshot(List.of(new ItemStack(Items.STONE)), List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());
         assertEquals(0, calculator.calculate(snapshot(List.of(), List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());

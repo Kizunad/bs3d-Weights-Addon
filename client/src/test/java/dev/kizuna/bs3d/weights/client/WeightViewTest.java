@@ -14,6 +14,7 @@ class WeightViewTest {
                 .setContentsGrams(900)
                 .setTotalGrams(1001);
         var message = state("a", 4, 1001).toBuilder()
+                .setEffectiveGrams(2002)
                 .addContainers(container)
                 .build();
         var view = new WeightView();
@@ -46,6 +47,10 @@ class WeightViewTest {
         var view = new WeightView();
         view.accept(state("a", 1, 1000));
         assertThrows(IllegalArgumentException.class, () -> view.accept(state("a", 2, -1)));
+        var negativeEffective = state("a", 2, 1000).toBuilder()
+                .setEffectiveGrams(-1)
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> view.accept(negativeEffective));
         assertEquals(1000, view.state().getTotalGrams());
     }
 

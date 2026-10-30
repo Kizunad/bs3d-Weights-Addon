@@ -17,13 +17,14 @@ v1 的 `SubscribeRequest` 必须为空，未知字段也会被拒绝。客户端
 |---|---|---|
 | 1 | `session` | Framework 连接 UUID，换世界或重连变化 |
 | 2 | `revision` | 本连接递增修订号，与 BS3D 库存修订号独立 |
-| 3 | `status` | `OK` 或 `INVALID_INVENTORY`；非 OK 时数值不可显示 |
+| 3 | `status` | `OK` 或 `INVALID_INVENTORY`；非 OK 时两项重量都不可显示 |
 | 4 | `total_grams` | 随身总重，int64 克，不包含地面容器 |
 | 5 | `containers` | 当前可见容器全部明细，含嵌套与已获准打开的地面容器 |
+| 6 | `effective_grams` | 按服务端 `burden.toml` 系数加权的有效负重，int64 克；只计数，不代表限制 |
 
 `ContainerWeight` 依次为：`container_id=1`（实例 UUID）、`title=2`（展示名）、`contents_grams=3`（含嵌套内容）、`total_grams=4`（自重加内容）、`carried=5`（是否随身）。地面树内所有容器的 carried 都为 false。字段号不得复用。
 
-订阅成功立即推送；之后每 5 个服务端 tick 检查一次，20 TPS 时最多约 250 ms 延迟，仅变化时推送。计时转移提交前不改变库存，取消后重量不变。暂停的单机不继续 tick，恢复后正常更新。
+订阅成功立即推送；之后每 5 个服务端 tick 检查一次，20 TPS 时最多约 250 ms 延迟，仅变化时推送。转移是同一 tick 校验并提交的即时事务，被拒绝的转移不改变库存与重量。暂停的单机不继续 tick，恢复后正常更新。
 
 传输和解码大小、方向、版本、类型、请求回执及旧连接隔离由 Framework 负责。客户端忽略同连接旧修订，断线清空缓存。服务端只读取个人库存及 BS3D 当前已授权的地面根容器，不扫描其他玩家或全世界容器。
 

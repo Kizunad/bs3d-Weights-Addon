@@ -23,8 +23,8 @@ public final class WeightView {
         if (next.getStatus() == Status.UNRECOGNIZED || next.getStatus() == Status.STATUS_UNSPECIFIED) {
             throw new IllegalArgumentException("重量快照缺少有效状态");
         }
-        if (next.getTotalGrams() < 0) {
-            throw new IllegalArgumentException("随身总重不能为负数");
+        if (next.getTotalGrams() < 0 || next.getEffectiveGrams() < 0) {
+            throw new IllegalArgumentException("随身实重和有效负重不能为负数");
         }
         // 完整校验明细后才替换缓存；重复身份或错误数值不会覆盖最后有效结果。
         Set<String> identities = new HashSet<>();

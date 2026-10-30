@@ -59,7 +59,10 @@ class RegisteredWeightsTest {
         var stack = new ItemStack(Items.GOLD_INGOT, 3);
         var inventory = new InventoryAccess.Snapshot(
                 SavedInventory.getDefaultInstance(), List.of(stack), Map.of());
-        var state = new WeightCalculator(rules::unitGrams).calculate(inventory, ItemStack.EMPTY);
+        var factors = BurdenFactors.parse(
+                "hotbar = 1\nmain = 1\narmor = 1\noffhand = 1\ncursor = 1\nworn_containers = 1\n");
+        var calculator = new WeightCalculator(rules::unitGrams, BurdenSlots.VANILLA, factors);
+        var state = calculator.calculate(inventory, ItemStack.EMPTY);
         assertEquals(1125, state.getTotalGrams());
     }
 

@@ -9,31 +9,44 @@ import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.WeightState;
 import net.minecraft.item.ItemStack;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.ToLongFunction;
 
-/** 从真实库存树自底向上累计，每个根只加入总重一次。 */
+/** 从真实库存树自底向上累计，每个根只加入总重一次；有效负重按根所在来源加权。 */
 public final class WeightCalculator {
     // 每次计算允许访问的非空物品栈数量，限制损坏库存带来的遍历工作量。
     private static final int MAX_VISITED_STACKS = 4096;
     private final ToLongFunction<ItemStack> unitGrams;
+    private final BurdenSlots slots;
+    private final BurdenFactors factors;
 
-    public WeightCalculator(ToLongFunction<ItemStack> unitGrams) {
+    WeightCalculator(ToLongFunction<ItemStack> unitGrams, BurdenSlots slots, BurdenFactors factors) {
         this.unitGrams = unitGrams;
+        this.slots = slots;
+        this.factors = factors;
     }
 
     public WeightState calculate(InventoryAccess.Snapshot inventory, ItemStack cursor) {
         // 每次计算使用独立遍历状态；损坏树必须抛错，不能发布看似正常的部分总重。
         var walk = new Walk();
-        long total = 0;
-        for (var stack : inventory.playerSlots()) {
-            total = Math.addExact(total, walk.stack(stack, true, 0));
+        var playerSlots = inventory.playerSlots();
+        for (int slot = 0; slot < playerSlots.size(); slot++) {
+            var stack = playerSlots.get(slot);
+            var source = slots.source(slot);
+            if (source.isPresent()) {
+                walk.carry(stack, source.get());
+            } else {
+                // Pocket 已移除的旧主库存槽仍计实重，但不属于任何有效负重来源。
+                walk.carry(stack);
+            }
         }
-        total = Math.addExact(total, walk.stack(cursor, true, 0));
+        walk.carry(cursor, BurdenSource.CURSOR);
         for (var worn : inventory.equipment().getWornList()) {
-            total = Math.addExact(total, walk.stack(StackCodec.decode(worn.getStackNbt()), true, 0));
+            walk.carry(StackCodec.decode(worn.getStackNbt()), BurdenSource.WORN_CONTAINERS);
         }
         // 地面容器仅产生明细，其子树也带 carried=false，不能混入随身总重。
         for (var stack : inventory.ground().values()) {
@@ -42,7 +55,8 @@ public final class WeightCalculator {
         walk.containers.sort(Comparator.comparing(ContainerWeight::getContainerId));
         return WeightState.newBuilder()
                 .setStatus(Status.OK)
-                .setTotalGrams(total)
+                .setTotalGrams(walk.total)
+                .setEffectiveGrams(factors.effectiveGrams(walk.carried))
                 .addAllContainers(walk.containers)
                 .build();
     }
@@ -50,7 +64,22 @@ public final class WeightCalculator {
     private final class Walk {
         private final Set<String> identities = new HashSet<>();
         private final List<ContainerWeight> containers = new ArrayList<>();
+        private final Map<BurdenSource, Long> carried = new EnumMap<>(BurdenSource.class);
+        private long total;
         private int visitedStacks;
+
+        private long carry(ItemStack stack) {
+            // 随身根只在这里加入实重，嵌套内容已由递归累计到根上。
+            long grams = stack(stack, true, 0);
+            total = Math.addExact(total, grams);
+            return grams;
+        }
+
+        private void carry(ItemStack stack, BurdenSource source) {
+            // 同一来源的多个根先合计实重，系数在全部遍历完成后统一套用。
+            long grams = carry(stack);
+            carried.merge(source, grams, Math::addExact);
+        }
 
         private long stack(ItemStack stack, boolean carried, int depth) {
             // 空槽不计重；每件非空栈限制工作量与堆叠数量。

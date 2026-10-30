@@ -48,8 +48,10 @@ python3 scripts/wiki.py check
 | 客户端和单机 | Framework 客户端 + BS3D 客户端 + `client/build/libs/bs3d-weights-addon-client-0.1.0-SNAPSHOT.jar` |
 | 专用服务器 | Framework 服务端 + BS3D 服务端 + `server/build/libs/bs3d-weights-addon-server-0.1.0-SNAPSHOT.jar` |
 
+2026-10-30 起，同级的 Framework（提交 997b993）与 BS3D（未提交源码）已把服务端路由和库存实现移出客户端产物，客户端模组依赖各自的服务端模组。用这两份源码构建时，单机除上表客户端 JAR 外还要安装 Framework 服务端和 BS3D 服务端 JAR；本仓库客户端构建已同时引用两者。此组合目前只验证了编译和单元测试，未重跑 smoke。
+
 每端都安装 Fabric API。两份 Addon JAR 使用同一模组 ID，在同一实例只安装对应的一份；单机客户端产物已经包含逻辑服务端，不再加装专用服务端 JAR。服务端产物不含客户端渲染类或 owo。
 
-进入世界，按 **B** 打开背包。左上角显示随身重量，容器打开后标题旁显示该容器总重。数据初次到达前显示等待；服务端未安装重量附属时显示未启用，BS3D 基础库存仍可用。单机世界使用本地内置服务器的数据包。
+进入世界，按 **B** 打开背包。左上角显示「实重 / 负重」，即随身实重与按[系数](Weight-Rules.md)加权的有效负重；容器打开后标题旁显示该容器总重。数据初次到达前显示等待；服务端未安装重量附属时显示未启用，BS3D 基础库存仍可用。单机世界使用本地内置服务器的数据包。
 
 生产 JAR 不创建测试物品、不自动移动。`scripts/smoke.py` 仅用于隔离自动验收，见[验证记录](Validation.md)。重量规则见[配置说明](Weight-Rules.md)。
