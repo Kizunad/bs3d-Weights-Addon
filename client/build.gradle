@@ -3,10 +3,10 @@ sourceSets.main.java.srcDir rootProject.file('server/src/main/java')
 
 dependencies {
     // 组合进来的 Loom 工程直接取 named 开发 JAR：按坐标走 mod 重映射的缓存不随上游改动刷新，也不会先构建上游。
-    implementation('local.inventory-ui:client') { targetConfiguration = 'namedElements' }
+    implementation('dev.kizuna.inventoryui:kizuna-inventory-ui-framework') { targetConfiguration = 'namedElements' }
     implementation('local.bs3d:client') { targetConfiguration = 'namedElements' }
     // Framework 与 BS3D 的客户端产物不再内含服务端路由和库存访问，内置服务器代码改从两端共用的服务端产物编译。
-    implementation('local.inventory-ui:server') { targetConfiguration = 'namedElements' }
+    implementation('dev.kizuna.inventoryui:server') { targetConfiguration = 'namedElements' }
     implementation('local.bs3d:server') { targetConfiguration = 'namedElements' }
     modImplementation libs.owo
     // 内置服务器读取有效负重系数表；同版本解析库与 BS3D 客户端内嵌的一份由加载器去重。
