@@ -26,22 +26,14 @@ git -C "backpack-and-storage-3D" checkout 6a09d7ade862f5741a581f890dbc7ae4c4dfde
 
 ## 从配套源码构建
 
-先构建包含单机支持的 Framework，再构建包含 `InventoryAccess`、`ContainerDetails` 和 `ItemMetadata` 的 BS3D，最后构建本仓库：
+需要包含单机支持的 Framework 与包含 `InventoryAccess`、`ContainerDetails` 和 `ItemMetadata` 的 BS3D 源码。两者以组合构建接入，随本仓构建先行编译：
 
 ```sh
-# 在 Framework 仓库运行
 ./gradlew test build
-
-# 在 BS3D 仓库运行
-./gradlew -PframeworkDir="/path/to/Kizuna-Inventory-UI-Framework" test build
-
-# 在本仓库运行
-./gradlew -PframeworkDir="/path/to/Kizuna-Inventory-UI-Framework" \
-  -Pbs3dDir="/path/to/backpack-and-storage-3D" test build
 python3 scripts/wiki.py check
 ```
 
-缺省从同级 `Kizuna-Inventory-UI-Framework`、`backpack-and-storage-3D` 目录取构建产物。Windows 使用 `gradlew.bat`。尚未发布 Maven 坐标；两个依赖仓库均需上述接口，文件名同为 SNAPSHOT 不代表内容兼容。
+缺省使用同级 `Kizuna-Inventory-UI-Framework`、`backpack-and-storage-3D` 源码目录，其他布局用 `-Pkizuna.dir.inventory-ui=…`、`-Pkizuna.dir.bs3d=…` 指定。构建还需要相邻的 `Kizuna-Meridian-Mod-Framework`：`settings.gradle` 应用其 `scripts/workspace.gradle`，Gradle 8.14.6、Fabric Loom 1.13.6 与第三方版本都取自其版本目录 `scripts/libs.versions.toml`。Gradle 须在 Java 21 上运行（Loom 1.13 的要求），产物仍以 Java 17 为目标。Windows 使用 `gradlew.bat`。尚未发布 Maven 坐标；两个依赖仓库均需上述接口，文件名同为 SNAPSHOT 不代表内容兼容。
 
 | 安装位置 | JAR |
 |---|---|

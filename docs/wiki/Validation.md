@@ -69,8 +69,10 @@ Java 17 下 `test build` 通过：Addon 20 项测试（服务端 15，客户端 
 ```sh
 ./gradlew test build
 python3 scripts/wiki.py check
-python3 scripts/smoke.py --java-home "/path/to/jdk17"
+python3 scripts/smoke.py
 ```
+
+`--java-home` 可指定运行 Gradle 的 JDK（Loom 1.13 起须为 Java 21），省略时沿用当前环境。
 
 smoke 在全新 `build/smoke/<run-id>-<mode>/` 创建世界，默认端口 25583，仅 Linux Xvfb 自动运行。端口冲突时可通过 `--port` 改用其他端口，客户端与独服统一使用该值；不连接或停止占用端口的现有服务器。它会生成物品、测试计时转移与取消、通过数据包热重载改重量，并在完成后正常退出。测试源码不打入生产 JAR，不能用它替代玩家手动体验。
 
