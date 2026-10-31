@@ -41,8 +41,8 @@ public final class Burden {
 
     private static WeightState read(ServerPlayer player) {
         // 与订阅会话同一节奏：每 5 个服务端 tick 最多重算一次，期间的读取都复用上次结果。
-        var server = player.getServer();
-        if (server == null || !server.isSameThread()) {
+        var server = player.level().getServer();
+        if (!server.isSameThread()) {
             throw new IllegalStateException("负重只能在逻辑服务器主线程读取");
         }
         int now = server.getTickCount();
@@ -59,7 +59,7 @@ public final class Burden {
         // 损坏库存与溢出返回不可用状态，由调用方决定如何回退；连续失败只告警一次。
         try {
             var cursor = player.containerMenu.getCarried();
-            return WeightsServer.calculator().calculate(InventoryAccess.snapshot(player), cursor);
+            return WeightsServer.calculator().calculate(InventoryAccess.snapshot(player), cursor, player.registryAccess());
         } catch (IllegalArgumentException | ArithmeticException | UncheckedIOException invalid) {
             if (previous == null || previous.state().getStatus() != Status.INVALID_INVENTORY) {
                 LOGGER.warn("玩家 {} 的负重暂不可用", player.getUUID(), invalid);

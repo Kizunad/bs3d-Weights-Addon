@@ -8,8 +8,6 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -25,8 +23,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 
 class BurdenTest {
-    // 原版玩家库存：36 格主库存、4 格盔甲、1 格副手。
-    private static final int PLAYER_SLOTS = Inventory.SLOT_OFFHAND + 1;
+    // 26.2 原版玩家库存：36 格主库存、4 格盔甲，以及副手、身体盔甲与鞍各 1 格。
+    private static final int PLAYER_SLOTS = BurdenSlots.PLAYER_SLOTS;
     private static final int HOTBAR_SLOT = 0;
     private static final int FIRST_MAIN_SLOT = 9;
     private static final int LAST_POCKET_SLOT = 17;
@@ -36,9 +34,7 @@ class BurdenTest {
     @BeforeAll
     static void bootstrap() {
         // 注册原版和 BS3D 物品后才构造真实 ItemStack 与容器。
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-        ContainerItems.initialize();
+        TestRegistries.bootstrap();
     }
 
     @Test
@@ -51,7 +47,7 @@ class BurdenTest {
                 ARMOR_SLOT, new ItemStack(Items.IRON_HELMET),
                 Inventory.SLOT_OFFHAND, new ItemStack(Items.IRON_SWORD)));
         var pouch = pouch(new ItemStack(Items.STONE, 3));
-        var state = calculator.calculate(snapshot(slots, List.of(pouch)), new ItemStack(Items.STONE));
+        var state = calculator.calculate(snapshot(slots, List.of(pouch)), new ItemStack(Items.STONE), TestRegistries.VANILLA);
         assertEquals(2000 + 3000 + 250 + 250 + 1000 + 3250, state.getTotalGrams());
         assertEquals(0 + 6000 + 250 + 250 + 1000 + 3250, state.getEffectiveGrams());
     }
@@ -60,9 +56,9 @@ class BurdenTest {
     void hotbarStonesAreFreeButMainInventoryStonesCountTwice() throws IOException {
         var calculator = new WeightCalculator(BurdenTest::stoneOrSmall, BurdenSlots.VANILLA, shipped());
         var hotbar = calculator.calculate(snapshot(slots(Map.of(HOTBAR_SLOT, new ItemStack(Items.STONE, 64))),
-                List.of()), ItemStack.EMPTY);
+                List.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
         var main = calculator.calculate(snapshot(slots(Map.of(FIRST_MAIN_SLOT, new ItemStack(Items.STONE, 64))),
-                List.of()), ItemStack.EMPTY);
+                List.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(64_000, hotbar.getTotalGrams());
         assertEquals(0, hotbar.getEffectiveGrams());
         assertEquals(64_000, main.getTotalGrams());
@@ -79,10 +75,10 @@ class BurdenTest {
         var hidden = slots(Map.of(HIDDEN_BY_POCKET_SLOT, new ItemStack(Items.STONE)));
         var vanilla = new WeightCalculator(BurdenTest::stoneOrSmall, BurdenSlots.VANILLA, shipped());
         var pocket = new WeightCalculator(BurdenTest::stoneOrSmall, BurdenSlots.POCKET, shipped());
-        assertEquals(2000, vanilla.calculate(snapshot(lastRow, List.of()), ItemStack.EMPTY).getEffectiveGrams());
-        assertEquals(2000, pocket.calculate(snapshot(lastRow, List.of()), ItemStack.EMPTY).getEffectiveGrams());
-        assertEquals(2000, vanilla.calculate(snapshot(hidden, List.of()), ItemStack.EMPTY).getEffectiveGrams());
-        var pocketHidden = pocket.calculate(snapshot(hidden, List.of()), ItemStack.EMPTY);
+        assertEquals(2000, vanilla.calculate(snapshot(lastRow, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getEffectiveGrams());
+        assertEquals(2000, pocket.calculate(snapshot(lastRow, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getEffectiveGrams());
+        assertEquals(2000, vanilla.calculate(snapshot(hidden, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getEffectiveGrams());
+        var pocketHidden = pocket.calculate(snapshot(hidden, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(1000, pocketHidden.getTotalGrams());
         assertEquals(0, pocketHidden.getEffectiveGrams());
     }
@@ -95,7 +91,7 @@ class BurdenTest {
         var slots = slots(Map.of(
                 FIRST_MAIN_SLOT, new ItemStack(Items.STICK),
                 FIRST_MAIN_SLOT + 1, new ItemStack(Items.STICK)));
-        assertEquals(1, calculator.calculate(snapshot(slots, List.of()), ItemStack.EMPTY).getEffectiveGrams());
+        assertEquals(1, calculator.calculate(snapshot(slots, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getEffectiveGrams());
     }
 
     @Test
@@ -104,7 +100,7 @@ class BurdenTest {
         var calculator = new WeightCalculator(BurdenTest::stoneOrSmall, BurdenSlots.VANILLA, factors);
         var slots = slots(Map.of(FIRST_MAIN_SLOT, new ItemStack(Items.STONE)));
         assertThrows(ArithmeticException.class,
-                () -> calculator.calculate(snapshot(slots, List.of()), ItemStack.EMPTY));
+                () -> calculator.calculate(snapshot(slots, List.of()), ItemStack.EMPTY, TestRegistries.VANILLA));
     }
 
     @Test
@@ -145,7 +141,7 @@ class BurdenTest {
     }
 
     private static List<ItemStack> slots(Map<Integer, ItemStack> occupied) {
-        // 按原版槽号铺满 41 格，未指定的槽为空栈。
+        // 按原版槽号铺满 43 格，未指定的槽为空栈。
         var slots = new ArrayList<ItemStack>();
         for (int slot = 0; slot < PLAYER_SLOTS; slot++) {
             slots.add(occupied.getOrDefault(slot, ItemStack.EMPTY));
@@ -157,7 +153,7 @@ class BurdenTest {
         var saved = TransferService.empty().toBuilder();
         for (var stack : worn) {
             saved.addWorn(WornContainer.newBuilder()
-                    .setStackNbt(StackCodec.encode(stack))
+                    .setStackNbt(StackCodec.encode(stack, TestRegistries.VANILLA))
                     .setMount(Mount.TORSO_BACK));
         }
         return new InventoryAccess.Snapshot(saved.build(), slots, Map.of());
@@ -169,7 +165,7 @@ class BurdenTest {
         var contents = Item.newBuilder()
                 .setId(UUID.randomUUID().toString())
                 .setContainer(ContainerItems.identity(stack))
-                .setStackNbt(StackCodec.encode(child))
+                .setStackNbt(StackCodec.encode(child, TestRegistries.VANILLA))
                 .setBaseSize(Volumes.UNIT)
                 .setSize(Volumes.UNIT)
                 .build();

@@ -1,7 +1,7 @@
 dependencies {
-    // 与 client 相同，组合工程取 named 开发 JAR，避免 mod 重映射缓存滞后于上游源码。
-    implementation('dev.kizuna.inventoryui:server') { targetConfiguration = 'namedElements' }
-    implementation('dev.kizuna.backpack3d:server') { targetConfiguration = 'namedElements' }
+    // 与 client 相同，组合工程按坐标替换为上游源码工程，直接取其普通 JAR。
+    implementation 'dev.kizuna.inventoryui:server'
+    implementation 'dev.kizuna.backpack3d:server'
     testImplementation libs.fabric.junit
     // 有效负重系数表是 TOML；专用服务器没有 BS3D 客户端内嵌的解析库，由本附属自带。
     implementation libs.tomlj
@@ -9,7 +9,11 @@ dependencies {
     implementation libs.antlr.runtime
     include libs.antlr.runtime
 }
-test { systemProperty 'fabric.side', 'server' }
+test {
+    systemProperty 'fabric.side', 'server'
+    // 物品登记须在注册表冻结前、标签绑定须在冻结后，各测试类独占 JVM，互不改变对方的注册表状态。
+    forkEvery = 1
+}
 loom.runs {
     smoke {
         server()

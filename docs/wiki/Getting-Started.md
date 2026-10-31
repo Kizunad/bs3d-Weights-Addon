@@ -1,6 +1,6 @@
 # 安装与构建
 
-适用：未发布的 `0.1.0-SNAPSHOT`。需要 Java 17、Minecraft 1.20.1、Fabric Loader 0.16.10、Fabric API 0.92.3+1.20.1；客户端还需要 owo 0.11.2+1.20。
+适用：未发布的 `0.1.0-SNAPSHOT`。需要 Java 25、Minecraft 26.2、Fabric Loader 0.20.1、Fabric API 0.161.0+26.2；客户端还需要 owo 0.13.1+26.2。
 
 ## 配套依赖状态
 
@@ -22,6 +22,8 @@ git -C "backpack-and-storage-3D" checkout 6a09d7ade862f5741a581f890dbc7ae4c4dfde
 
 这些是已验证的源码提交，不是稳定 API 或正式发布版本；没有 Maven 坐标。
 
+上表与克隆命令是 1.20.1 时期的记录。迁移到 26.2 后，三个仓库使用同级目录 2026-11-01 迁移后的未推送源码，验证见[验证记录](Validation.md)。
+
 本次物品 `optional` 重量支持要求 BS3D 包含 `ItemMetadata` 和八参数 `ContainerItems.register`。上表中的 BS3D 提交已包含这些入口；两端都须使用由该提交构建的产物，旧的同名 SNAPSHOT JAR 不满足依赖要求。Framework 本次无改动，继续使用表中的兼容提交。
 
 ## 从配套源码构建
@@ -33,14 +35,14 @@ git -C "backpack-and-storage-3D" checkout 6a09d7ade862f5741a581f890dbc7ae4c4dfde
 python3 scripts/wiki.py check
 ```
 
-缺省使用同级 `Kizuna-Inventory-UI-Framework`、`backpack-and-storage-3D` 源码目录，其他布局用 `-Pkizuna.dir.inventory-ui=…`、`-Pkizuna.dir.bs3d=…` 指定。构建还需要相邻的 `Kizuna-Meridian-Mod-Framework`：`settings.gradle` 应用其 `scripts/workspace.gradle`，Gradle 8.14.6、Fabric Loom 1.13.6 与第三方版本都取自其版本目录 `scripts/libs.versions.toml`。Gradle 须在 Java 21 上运行（Loom 1.13 的要求），产物仍以 Java 17 为目标。Windows 使用 `gradlew.bat`。尚未发布 Maven 坐标；两个依赖仓库均需上述接口，文件名同为 SNAPSHOT 不代表内容兼容。
+缺省使用同级 `Kizuna-Inventory-UI-Framework`、`backpack-and-storage-3D` 源码目录，其他布局用 `-Pkizuna.dir.inventory-ui=…`、`-Pkizuna.dir.bs3d=…` 指定。构建还需要相邻的 `Kizuna-Meridian-Mod-Framework`：`settings.gradle` 应用其 `scripts/workspace.gradle`，Gradle 9.8.0、Fabric Loom 1.19.3 与第三方版本都取自其版本目录 `scripts/libs.versions.toml`。Gradle 须在 Java 25 上运行，产物以 Java 25 为目标（Minecraft 26.2 的要求）。26.2 不混淆，直接用官方名编译，没有映射与 refmap，安装产物就是 `jar` 任务输出。Windows 使用 `gradlew.bat`。尚未发布 Maven 坐标；两个依赖仓库均需上述接口，文件名同为 SNAPSHOT 不代表内容兼容。
 
 | 安装位置 | JAR |
 |---|---|
 | 客户端和单机 | Framework 客户端 + BS3D 客户端 + `client/build/libs/bs3d-weights-addon-client-0.1.0-SNAPSHOT.jar` |
 | 专用服务器 | Framework 服务端 + BS3D 服务端 + `server/build/libs/bs3d-weights-addon-server-0.1.0-SNAPSHOT.jar` |
 
-2026-10-30 起，同级的 Framework（提交 997b993）与 BS3D（未提交源码）已把服务端路由和库存实现移出客户端产物，客户端模组依赖各自的服务端模组。用这两份源码构建时，单机除上表客户端 JAR 外还要安装 Framework 服务端和 BS3D 服务端 JAR；本仓库客户端构建已同时引用两者。此组合目前只验证了编译和单元测试，未重跑 smoke。
+2026-10-30 起，同级的 Framework（提交 997b993）与 BS3D（未提交源码）已把服务端路由和库存实现移出客户端产物，客户端模组依赖各自的服务端模组。用这两份源码构建时，单机除上表客户端 JAR 外还要安装 Framework 服务端和 BS3D 服务端 JAR；本仓库客户端构建已同时引用两者。2026-11-01 迁移到 26.2 后，已用这一组合在开发运行环境跑通单机与独服 smoke；未在独立安装的实例上验证。
 
 每端都安装 Fabric API。两份 Addon JAR 使用同一模组 ID，在同一实例只安装对应的一份；单机客户端产物已经包含逻辑服务端，不再加装专用服务端 JAR。服务端产物不含客户端渲染类或 owo。
 

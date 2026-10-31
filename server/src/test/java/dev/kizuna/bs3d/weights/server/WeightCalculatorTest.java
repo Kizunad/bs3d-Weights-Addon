@@ -8,9 +8,9 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
-import net.minecraft.SharedConstants;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.Bootstrap;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,16 +31,14 @@ class WeightCalculatorTest {
     @BeforeAll
     static void bootstrap() {
         // 注册原版和 BS3D 物品后才构造真实 ItemStack，不能用假注册表替代规则。
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-        ContainerItems.initialize();
+        TestRegistries.bootstrap();
     }
 
     @Test
     void countsStacksArmorOffhandAndCursor() {
         var inventory = snapshot(List.of(new ItemStack(Items.STONE, 2), new ItemStack(Items.IRON_HELMET),
                 new ItemStack(Items.IRON_SWORD)), List.of(), Map.of());
-        assertEquals(3500, calculator.calculate(inventory, new ItemStack(Items.STONE)).getTotalGrams());
+        assertEquals(3500, calculator.calculate(inventory, new ItemStack(Items.STONE), TestRegistries.VANILLA).getTotalGrams());
     }
 
     @Test
@@ -48,7 +46,7 @@ class WeightCalculatorTest {
         var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE, 3));
         var basket = filled(ContainerItems.BASKET, pouch);
         var inventory = snapshot(List.of(), List.of(basket), Map.of());
-        var result = calculator.calculate(inventory, ItemStack.EMPTY);
+        var result = calculator.calculate(inventory, ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(3500, result.getTotalGrams());
         assertEquals(2, result.getContainersCount());
         String basketId = ContainerItems.identity(basket);
@@ -65,7 +63,7 @@ class WeightCalculatorTest {
     void groundContentsAppearButNeverIncreaseCarriedTotal() {
         var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE, 4));
         var result = calculator.calculate(snapshot(List.of(new ItemStack(Items.STONE)), List.of(),
-                Map.of(ContainerItems.identity(pouch), pouch)), ItemStack.EMPTY);
+                Map.of(ContainerItems.identity(pouch), pouch)), ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(1000, result.getTotalGrams());
         assertEquals(4250, result.getContainers(0).getTotalGrams());
         assertFalse(result.getContainers(0).getCarried());
@@ -74,8 +72,8 @@ class WeightCalculatorTest {
     @Test
     void movingBetweenRootsPreservesTotal() {
         var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE, 2));
-        var worn = calculator.calculate(snapshot(List.of(), List.of(pouch), Map.of()), ItemStack.EMPTY);
-        var held = calculator.calculate(snapshot(List.of(pouch), List.of(), Map.of()), ItemStack.EMPTY);
+        var worn = calculator.calculate(snapshot(List.of(), List.of(pouch), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
+        var held = calculator.calculate(snapshot(List.of(pouch), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(worn, held);
     }
 
@@ -83,22 +81,24 @@ class WeightCalculatorTest {
     void duplicateIdentityRejectsEntireCalculation() {
         var pouch = ContainerItems.create(ContainerItems.POUCH);
         assertThrows(IllegalArgumentException.class, () -> calculator.calculate(
-                snapshot(List.of(pouch), List.of(pouch.copy()), Map.of()), ItemStack.EMPTY));
+                snapshot(List.of(pouch), List.of(pouch.copy()), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA));
     }
 
     @Test
     void corruptContentsNeverBecomeZeroWeight() {
         var pouch = ContainerItems.create(ContainerItems.POUCH);
-        pouch.getTagElement("bs3d_container").putByteArray("contents", new byte[]{(byte) 0xff});
+        CustomData.update(DataComponents.CUSTOM_DATA, pouch, root -> root.getCompound("bs3d_container")
+                .orElseThrow()
+                .putByteArray("contents", new byte[]{(byte) 0xff}));
         assertThrows(IllegalArgumentException.class, () -> calculator.calculate(
-                snapshot(List.of(pouch), List.of(), Map.of()), ItemStack.EMPTY));
+                snapshot(List.of(pouch), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA));
     }
 
     @Test
     void weightsUseInt64WithoutInt32Overflow() {
         var heavy = new WeightCalculator(stack -> WeightRule.MAX_UNIT_GRAMS, BurdenSlots.VANILLA, UNIT_FACTORS);
         assertEquals(64_000_000_000L, heavy.calculate(snapshot(List.of(new ItemStack(Items.STONE, 64)),
-                List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());
+                List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getTotalGrams());
     }
 
     @Test
@@ -108,21 +108,21 @@ class WeightCalculatorTest {
         for (int depth = 0; depth < ContainerItems.MAX_NESTING_DEPTH; depth++) {
             nested = filled(ContainerItems.BOX, nested);
         }
-        var state = calculator.calculate(snapshot(List.of(nested), List.of(), Map.of()), ItemStack.EMPTY);
+        var state = calculator.calculate(snapshot(List.of(nested), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(2250, state.getTotalGrams());
         assertEquals(5, state.getContainersCount());
 
         var tooDeep = filled(ContainerItems.BOX, nested);
         assertThrows(IllegalArgumentException.class, () -> calculator.calculate(
-                snapshot(List.of(tooDeep), List.of(), Map.of()), ItemStack.EMPTY));
+                snapshot(List.of(tooDeep), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA));
     }
 
     @Test
     void emptyAndZeroWeightAreValid() {
         var zero = new WeightCalculator(stack -> 0, BurdenSlots.VANILLA, UNIT_FACTORS);
         assertEquals(0, zero.calculate(
-                snapshot(List.of(new ItemStack(Items.STONE)), List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());
-        assertEquals(0, calculator.calculate(snapshot(List.of(), List.of(), Map.of()), ItemStack.EMPTY).getTotalGrams());
+                snapshot(List.of(new ItemStack(Items.STONE)), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getTotalGrams());
+        assertEquals(0, calculator.calculate(snapshot(List.of(), List.of(), Map.of()), ItemStack.EMPTY, TestRegistries.VANILLA).getTotalGrams());
     }
 
     private static InventoryAccess.Snapshot snapshot(List<ItemStack> slots, List<ItemStack> worn, Map<String, ItemStack> ground) {
@@ -130,13 +130,13 @@ class WeightCalculatorTest {
         var saved = TransferService.empty().toBuilder();
         for (var stack : worn) {
             saved.addWorn(WornContainer.newBuilder()
-                    .setStackNbt(StackCodec.encode(stack))
+                    .setStackNbt(StackCodec.encode(stack, TestRegistries.VANILLA))
                     .setMount(Mount.TORSO_BACK));
         }
         return new InventoryAccess.Snapshot(saved.build(), slots, ground);
     }
 
-    private static ItemStack filled(ResourceLocation type, ItemStack child) {
+    private static ItemStack filled(Identifier type, ItemStack child) {
         // 容器子项沿用实例 UUID；普通物品使用独立条目身份，尺寸取真实定义。
         var stack = ContainerItems.create(type);
         var definition = ContainerItems.definition(child);
@@ -145,7 +145,7 @@ class WeightCalculatorTest {
         var contents = Item.newBuilder()
                 .setId(id)
                 .setContainer(ContainerItems.identity(stack))
-                .setStackNbt(StackCodec.encode(child))
+                .setStackNbt(StackCodec.encode(child, TestRegistries.VANILLA))
                 .setBaseSize(size)
                 .setSize(size)
                 .build();

@@ -4,13 +4,13 @@ import com.google.gson.JsonParser;
 import dev.kizuna.backpack3d.item.ItemMetadata;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.SavedInventory;
 import dev.kizuna.backpack3d.server.InventoryAccess;
-import net.minecraft.SharedConstants;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.Bootstrap;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.Items;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -35,8 +35,7 @@ class RegisteredWeightsTest {
     @BeforeAll
     static void bootstrap() {
         // 不覆盖其他测试使用的原版条目，每个注册一次的物品代表一种配置。
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
+        TestRegistries.bootstrap();
         invalidItems = List.of(Items.COAL, Items.CHARCOAL, Items.COPPER_INGOT, Items.IRON_NUGGET,
                 Items.GOLD_NUGGET, Items.QUARTZ, Items.AMETHYST_SHARD);
         register(Items.GOLD_INGOT, "{\"grams\":375}");
@@ -48,7 +47,7 @@ class RegisteredWeightsTest {
             register(invalidItems.get(index), invalid.get(index));
         }
         ItemMetadata.register(Items.EMERALD, "", Map.of(
-                new ResourceLocation("another_addon", "weight"),
+                Identifier.fromNamespaceAndPath("another_addon", "weight"),
                 JsonParser.parseString("{\"grams\":999}").getAsJsonObject()));
     }
 
@@ -62,7 +61,7 @@ class RegisteredWeightsTest {
         var factors = BurdenFactors.parse(
                 "hotbar = 1\nmain = 1\narmor = 1\noffhand = 1\ncursor = 1\nworn_containers = 1\n");
         var calculator = new WeightCalculator(rules::unitGrams, BurdenSlots.VANILLA, factors);
-        var state = calculator.calculate(inventory, ItemStack.EMPTY);
+        var state = calculator.calculate(inventory, ItemStack.EMPTY, TestRegistries.VANILLA);
         assertEquals(1125, state.getTotalGrams());
     }
 
@@ -119,7 +118,11 @@ class RegisteredWeightsTest {
             var stack = new ItemStack(item);
             var forged = new CompoundTag();
             forged.putLong("grams", 0);
-            stack.getOrCreateTagElement("optional").put("bs3d_weights:weight", forged);
+            CustomData.update(DataComponents.CUSTOM_DATA, stack, root -> {
+                var optional = new CompoundTag();
+                optional.put("bs3d_weights:weight", forged);
+                root.put("optional", optional);
+            });
             assertEquals(item == Items.GOLD_INGOT ? 375 : 100, rules.unitGrams(stack));
         }
     }
@@ -130,7 +133,7 @@ class RegisteredWeightsTest {
     }
 
     private static TestResources rule(String item, String grams) {
-        var id = new ResourceLocation("test", "bs3d_weights/weights/registered.json");
+        var id = Identifier.fromNamespaceAndPath("test", "bs3d_weights/weights/registered.json");
         byte[] bytes = ("{\"item\":\"" + item + "\",\"grams\":" + grams + "}")
                 .getBytes(StandardCharsets.UTF_8);
         return new TestResources(Map.of(id, new Resource(null, () -> new ByteArrayInputStream(bytes))));

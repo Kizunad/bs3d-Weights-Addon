@@ -13,10 +13,13 @@ import dev.kizuna.bs3d.weights.server.WeightRules;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.SharedConstants;
 import net.minecraft.commands.Commands;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.LevelResource;
@@ -29,8 +32,6 @@ import java.util.UUID;
 
 /** 只存在于 smoke 源集的服务器夹具，不进入生产 JAR。 */
 public final class WeightsFixture implements ModInitializer {
-    private static final int ADMIN_PERMISSION_LEVEL = 2;
-
     @Override
     public void onInitialize() {
         // 单机与专用服务端共用夹具；数据始终由实际服务器玩家及库存事务创建。
@@ -40,7 +41,7 @@ public final class WeightsFixture implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> seedInventory(handler.player));
         CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> {
             dispatcher.register(Commands.literal("weights-fixture-reload")
-                    .requires(source -> source.hasPermission(ADMIN_PERMISSION_LEVEL))
+                    .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                     .executes(context -> {
                         // 用真实数据包热重载改重量，客户端不会读取此文件。
                         var server = context.getSource().getServer();
@@ -59,13 +60,14 @@ public final class WeightsFixture implements ModInitializer {
 
     private static void seedInventory(ServerPlayer player) {
         // 仅首次进入隔离世界时建夹具；重开世界必须保留之前的真实提交。
-        player.getServer().getPlayerList().op(player.getGameProfile());
+        player.level().getServer().getPlayerList().op(player.nameAndId());
         var account = new PlayerAccount(player);
         if (account.data().getRevision() != 0) {
             return;
         }
-        var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE));
-        var basket = filled(ContainerItems.BASKET, pouch);
+        var registries = player.registryAccess();
+        var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE), registries);
+        var basket = filled(ContainerItems.BASKET, pouch, registries);
         var slots = account.inventory();
         for (int slot = 0; slot < slots.size(); slot++) {
             slots.set(slot, ItemStack.EMPTY);
@@ -78,7 +80,7 @@ public final class WeightsFixture implements ModInitializer {
                 .setRevision(1)
                 .addWorn(WornContainer.newBuilder()
                         .setMount(Mount.WAIST_RIGHT_FRONT)
-                        .setStackNbt(StackCodec.encode(worn)))
+                        .setStackNbt(StackCodec.encode(worn, registries)))
                 .build();
         try {
             account.commit(data, slots);
@@ -92,9 +94,11 @@ public final class WeightsFixture implements ModInitializer {
         var pack = server.getWorldPath(LevelResource.ROOT).resolve("datapacks/weights-smoke");
         try {
             Files.createDirectories(pack.resolve("data/smoke/bs3d_weights/weights"));
-            Files.writeString(pack.resolve("pack.mcmeta"), """
-                    {"pack":{"pack_format":15,"description":"Weights smoke"}}
-                    """);
+            // 26.x 数据包格式带次版本号，只认 min_format/max_format；取当前游戏的格式，不写死版本。
+            var format = SharedConstants.getCurrentVersion().packVersion(PackType.SERVER_DATA);
+            var version = "[" + format.major() + "," + format.minor() + "]";
+            Files.writeString(pack.resolve("pack.mcmeta"), "{\"pack\":{\"min_format\":" + version
+                    + ",\"max_format\":" + version + ",\"description\":\"Weights smoke\"}}\n");
             Files.writeString(pack.resolve("data/smoke/bs3d_weights/weights/stone.json"), """
                     {"item":"minecraft:stone","grams":2000,"priority":100}
                     """);
@@ -103,7 +107,7 @@ public final class WeightsFixture implements ModInitializer {
         }
     }
 
-    private static ItemStack filled(ResourceLocation type, ItemStack child) {
+    private static ItemStack filled(Identifier type, ItemStack child, HolderLookup.Provider registries) {
         // 保留子容器实例身份，普通物品才生成独立条目身份；占格使用 BS3D 定义。
         var container = ContainerItems.create(type);
         var definition = ContainerItems.definition(child);
@@ -112,7 +116,7 @@ public final class WeightsFixture implements ModInitializer {
         var contents = Item.newBuilder()
                 .setId(id)
                 .setContainer(ContainerItems.identity(container))
-                .setStackNbt(StackCodec.encode(child))
+                .setStackNbt(StackCodec.encode(child, registries))
                 .setBaseSize(size)
                 .setSize(size)
                 .build();

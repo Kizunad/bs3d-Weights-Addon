@@ -5,8 +5,9 @@ import dev.kizuna.inventoryui.server.ServerModuleRegistry;
 import dev.kizuna.inventoryui.server.fabric.FabricServerModule;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.PackType;
@@ -25,7 +26,8 @@ public final class WeightsServer implements ModInitializer, FabricServerModule {
     @Override
     public void onInitialize() {
         // 数据包属于逻辑服务器；客户端配置不能覆盖服务端规则。
-        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(RULES);
+        ResourceLoader.get(PackType.SERVER_DATA)
+                .registerReloadListener(Identifier.fromNamespaceAndPath("bs3d_weights", "rules"), RULES);
         // 系数表与 Pocket 槽位范围在启动时确定一次；坏配置在进入世界前直接拒绝。
         var factors = BurdenFactors.load(FabricLoader.getInstance().getConfigDir().resolve(BURDEN_CONFIG));
         calculator = new WeightCalculator(RULES::unitGrams, BurdenSlots.detect(), factors);

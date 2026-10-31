@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.ToLongFunction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 
 /** 从真实库存树自底向上累计，每个根只加入总重一次；有效负重按根所在来源加权。 */
@@ -30,9 +31,10 @@ public final class WeightCalculator {
         this.factors = factors;
     }
 
-    public WeightState calculate(InventoryAccess.Snapshot inventory, ItemStack cursor) {
+    public WeightState calculate(InventoryAccess.Snapshot inventory, ItemStack cursor, HolderLookup.Provider registries) {
         // 每次计算使用独立遍历状态；损坏树必须抛错，不能发布看似正常的部分总重。
-        var walk = new Walk();
+        // 容器内容按数据组件保存，解码须用玩家所在服务器的注册表。
+        var walk = new Walk(registries);
         var playerSlots = inventory.playerSlots();
         for (int slot = 0; slot < playerSlots.size(); slot++) {
             var stack = playerSlots.get(slot);
@@ -46,7 +48,7 @@ public final class WeightCalculator {
         }
         walk.carry(cursor, BurdenSource.CURSOR);
         for (var worn : inventory.equipment().getWornList()) {
-            walk.carry(StackCodec.decode(worn.getStackNbt()), BurdenSource.WORN_CONTAINERS);
+            walk.carry(StackCodec.decode(worn.getStackNbt(), registries), BurdenSource.WORN_CONTAINERS);
         }
         // 地面容器仅产生明细，其子树也带 carried=false，不能混入随身总重。
         for (var stack : inventory.ground().values()) {
@@ -62,11 +64,16 @@ public final class WeightCalculator {
     }
 
     private final class Walk {
+        private final HolderLookup.Provider registries;
         private final Set<String> identities = new HashSet<>();
         private final List<ContainerWeight> containers = new ArrayList<>();
         private final Map<BurdenSource, Long> carried = new EnumMap<>(BurdenSource.class);
         private long total;
         private int visitedStacks;
+
+        private Walk(HolderLookup.Provider registries) {
+            this.registries = registries;
+        }
 
         private long carry(ItemStack stack) {
             // 随身根只在这里加入实重，嵌套内容已由递归累计到根上。
@@ -116,7 +123,7 @@ public final class WeightCalculator {
             }
             long contents = 0;
             for (var item : ContainerItems.contents(stack).getItemsList()) {
-                var child = StackCodec.decode(item.getStackNbt());
+                var child = StackCodec.decode(item.getStackNbt(), registries);
                 contents = Math.addExact(contents, stack(child, carried, depth + 1));
             }
             long total = Math.addExact(own, contents);

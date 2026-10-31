@@ -1,13 +1,13 @@
 package dev.kizuna.bs3d.weights.server;
 
-import net.minecraft.SharedConstants;
 import net.minecraft.core.Holder;
+import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.Bootstrap;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.tags.TagKey;
+import net.minecraft.tags.TagLoader;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -24,8 +24,11 @@ class WeightRulesTest {
     @BeforeAll
     static void bootstrap() {
         // 物品 ID 和 tag 校验依赖真实原版注册表。
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
+        TestRegistries.bootstrap();
+        // 26.2 只有冻结后的注册表能按数据包流程绑定标签；按原版冻结顺序先把登记期标签绑为空。
+        // 冻结后本 JVM 不能再登记物品，构建脚本让每个测试类独占 JVM。
+        ((MappedRegistry<Item>) BuiltInRegistries.ITEM).bindAllTagsToEmpty();
+        BuiltInRegistries.ITEM.freeze();
     }
 
     @Test
@@ -49,17 +52,16 @@ class WeightRulesTest {
     void realItemTagMatches() {
         // 保存原标签并在 finally 恢复，不让测试标签污染同进程的其他测试。
         var original = new LinkedHashMap<TagKey<Item>, List<Holder<Item>>>();
-        BuiltInRegistries.ITEM.getTags().forEach(entry ->
-                original.put(entry.getFirst(), entry.getSecond().stream().toList()));
+        BuiltInRegistries.ITEM.getTags().forEach(named -> original.put(named.key(), named.stream().toList()));
         var tags = new LinkedHashMap<>(original);
-        tags.put(TagKey.create(Registries.ITEM, new ResourceLocation("test", "heavy")), List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.STONE)));
+        tags.put(TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("test", "heavy")), List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.STONE)));
         try {
-            BuiltInRegistries.ITEM.bindTags(tags);
+            bindTags(tags);
             var rules = new WeightRules();
             rules.onResourceManagerReload(resources(Map.of("tag", "{\"tag\":\"test:heavy\",\"grams\":500}")));
             assertEquals(500, rules.unitGrams(new ItemStack(Items.STONE)));
         } finally {
-            BuiltInRegistries.ITEM.bindTags(original);
+            bindTags(original);
         }
     }
 
@@ -90,15 +92,20 @@ class WeightRulesTest {
         assertEquals(0, rules.unitGrams(new ItemStack(Items.STONE)));
     }
 
+    private static void bindTags(Map<TagKey<Item>, List<Holder<Item>>> tags) {
+        // 冻结后的注册表只能走与数据包重载相同的待定标签流程替换整套标签。
+        BuiltInRegistries.ITEM.prepareTagReload(new TagLoader.LoadResult<>(Registries.ITEM, tags)).apply();
+    }
+
     private static String rule(String grams, int priority) {
         return "{\"item\":\"minecraft:stone\",\"grams\":" + grams + ",\"priority\":" + priority + "}";
     }
 
     private static TestResources resources(Map<String, String> files) {
         // 将每条 JSON 封装为独立可关闭的资源流，不依赖磁盘夹具。
-        var resources = new LinkedHashMap<ResourceLocation, Resource>();
+        var resources = new LinkedHashMap<Identifier, Resource>();
         for (var entry : files.entrySet()) {
-            var id = new ResourceLocation("test", "bs3d_weights/weights/" + entry.getKey() + ".json");
+            var id = Identifier.fromNamespaceAndPath("test", "bs3d_weights/weights/" + entry.getKey() + ".json");
             byte[] bytes = entry.getValue().getBytes(StandardCharsets.UTF_8);
             resources.put(id, new Resource(null, () -> new ByteArrayInputStream(bytes)));
         }

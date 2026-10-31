@@ -12,12 +12,12 @@ weight.addProperty("grams", 1200);
 ItemMetadata.register(
         Items.IRON_SWORD,
         "item.example.iron_sword.description",
-        Map.of(new ResourceLocation("bs3d_weights", "weight"), weight));
+        Map.of(Identifier.fromNamespaceAndPath("bs3d_weights", "weight"), weight));
 ```
 
 新容器使用 `ContainerItems.register` 最后的必填 `optional` 参数；不要在注册容器后重复补登记同一物品。通用字段表与描述的接口、资源准备和迁移说明见 BS3D 的物品扩展文档。BS3D 不依赖本附属，注册方可以使用字段 ID 字符串接入，无须引用附属类。
 
-匹配顺序固定为：**合法注册字段 → 数据包规则 → 默认 100 克**。仅匹配完整命名空间 `bs3d_weights:weight`，不匹配别的附属同名字段，也不读取物品 NBT 中的 `optional` 或客户端上报值。字段已合法注册时，数据包不会覆盖它；需要保留管理员数据包配置能力的类型可显式传空字段表。
+匹配顺序固定为：**合法注册字段 → 数据包规则 → 默认 100 克**。仅匹配完整命名空间 `bs3d_weights:weight`，不匹配别的附属同名字段，也不读取物品自定义数据（`minecraft:custom_data`）中的 `optional` 或客户端上报值。字段已合法注册时，数据包不会覆盖它；需要保留管理员数据包配置能力的类型可显式传空字段表。
 
 缺少字段时记录包含物品 ID、字段 ID 和回退方式的 WARN；无效字段同样警告，并包含校验失败原因，随后按上述回退顺序继续。每个物品类型在一次成功规则加载周期内只警告一次，成功 `/reload` 后重新检查；失败重载保留原规则和告警缓存。未携带或未参与计算的物品、空栈不告警。内置 BS3D 容器使用空字段表，因此保留现有演示自重并产生一次缺字段诊断。
 
@@ -25,7 +25,7 @@ ItemMetadata.register(
 
 规则只安装在逻辑服务器：专用服务器放入世界的 `datapacks/`，单机放入 `saves/<世界>/datapacks/`。启用后用 `/reload` 生效，客户端无须相同文件。
 
-数据包的 `pack.mcmeta` 使用 Minecraft 1.20.1 的 `pack_format: 15`。在 `data/example/bs3d_weights/weights/iron_sword.json` 中配置：
+数据包的 `pack.mcmeta` 按 Minecraft 26.2 写 `"min_format": [107, 1], "max_format": [107, 1]`（26.x 的数据包格式带次版本号）。在 `data/example/bs3d_weights/weights/iron_sword.json` 中配置：
 
 ```json
 {"item": "minecraft:iron_sword", "grams": 1200, "priority": 100}
@@ -54,7 +54,7 @@ ItemMetadata.register(
 
 BS3D 容器规则只设置空容器自重；Addon 自动加上所有嵌套内容，父容器重量包括子容器，不会把子容器总重再次加入随身总重。转移、装备位置改变不改变整棵随身树的合计，地面容器及其内容单独统计。
 
-统计原版主库存、盔甲、副手、界面光标栈及 BS3D 穿戴根容器。末影箱、普通打开箱子的内容不计随身重量；原版潜影盒、收纳袋及其他模组的内部库存目前按整件物品规则计自重，不解析其私有 NBT。当前递归扩展仅支持 BS3D 容器。
+统计原版主库存、盔甲、副手、界面光标栈及 BS3D 穿戴根容器。末影箱、普通打开箱子的内容不计随身重量；原版潜影盒、收纳袋及其他模组的内部库存目前按整件物品规则计自重，不解析其私有数据。当前递归扩展仅支持 BS3D 容器。
 
 结果用 int64 克保存并传输，客户端十进制换算 kg，保留 1 g 精度。没有重量缓存写入物品或玩家存档；读取、重连或规则重载后都从真实库存计算。损坏容器或重复身份时显示不可用，不显示部分总重。
 
@@ -73,6 +73,6 @@ BS3D 容器规则只设置空容器自重；Addon 自动加上所有嵌套内容
 
 六个键都必须存在；系数为非负整数或小数，0 表示不计入。缺键、多余键、负数、`nan`、`inf`、非数字或 TOML 语法错误都会让服务器启动失败，代码中没有隐式默认系数。
 
-每个来源先合计实重，再乘系数，四舍五入（半数进位）到整克后相加；结果超出 int64 时整次计算判为 `INVALID_INVENTORY`，不发布截断值。主库存范围只看 `bs3d_pocket` 是否加载，不读取 Pocket 的类。装了 Pocket 时 18–35 号槽不属于任何来源：其中的物品仍计入实重，但不计入有效负重；Pocket 每个服务端 tick 会清空这些槽。地面容器两种重量都不计。
+每个来源先合计实重，再乘系数，四舍五入（半数进位）到整克后相加；结果超出 int64 时整次计算判为 `INVALID_INVENTORY`，不发布截断值。主库存范围只看 `bs3d_pocket` 是否加载，不读取 Pocket 的类。装了 Pocket 时 18–35 号槽不属于任何来源：其中的物品仍计入实重，但不计入有效负重；Pocket 每个服务端 tick 会清空这些槽。26.2 玩家库存在副手（40 号）之后另有身体盔甲与鞍两格（41、42 号），玩家正常穿不上；若其中有物品，同样计入实重、不计入有效负重。地面容器两种重量都不计。
 
 通信细节见[协议](Protocol.md)。

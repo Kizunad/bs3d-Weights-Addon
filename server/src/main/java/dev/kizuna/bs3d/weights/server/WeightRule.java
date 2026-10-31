@@ -3,7 +3,7 @@ package dev.kizuna.bs3d.weights.server;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.Item;
@@ -19,19 +19,19 @@ import net.minecraft.world.item.ItemStack;
  * @param priority 匹配优先级，越大越先匹配
  */
 record WeightRule(
-        ResourceLocation resource,
-        ResourceLocation item,
+        Identifier resource,
+        Identifier item,
         TagKey<Item> tag,
         long grams,
         int priority) {
     static final long MAX_UNIT_GRAMS = 1_000_000_000L;
 
-    static WeightRule read(ResourceLocation resource, JsonObject json) {
+    static WeightRule read(Identifier resource, JsonObject json) {
         // 先确定选择器，再读取有明确单位的重量，最后读取匹配优先级。
         if (json.has("item") == json.has("tag")) {
             throw new IllegalArgumentException("必须且只能设置 item 或 tag");
         }
-        ResourceLocation item = null;
+        Identifier item = null;
         TagKey<Item> tag = null;
         if (json.has("item")) {
             item = identifier(json, "item");
@@ -62,9 +62,9 @@ record WeightRule(
         return grams;
     }
 
-    private static ResourceLocation identifier(JsonObject json, String field) {
+    private static Identifier identifier(JsonObject json, String field) {
         // 无效 ID 连同字段名报错，不能把拼错的物品名当作默认重量。
-        var id = ResourceLocation.tryParse(GsonHelper.getAsString(json, field));
+        var id = Identifier.tryParse(GsonHelper.getAsString(json, field));
         if (id == null) {
             throw new IllegalArgumentException(field + " 必须是有效的资源 ID");
         }

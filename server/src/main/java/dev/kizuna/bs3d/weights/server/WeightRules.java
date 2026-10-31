@@ -2,11 +2,11 @@ package dev.kizuna.bs3d.weights.server;
 
 import com.google.gson.JsonParser;
 import dev.kizuna.backpack3d.item.ItemMetadata;
-import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -21,20 +21,15 @@ import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** /reload 后整体替换服务端规则；不向客户端发送或信任客户端重量配置。 */
-public final class WeightRules implements SimpleSynchronousResourceReloadListener {
+public final class WeightRules implements ResourceManagerReloadListener {
     /** BS3D optional 中由本附属解释的字段，值为包含 grams 的 JSON 对象。 */
-    public static final ResourceLocation WEIGHT_FIELD = new ResourceLocation("bs3d_weights", "weight");
+    public static final Identifier WEIGHT_FIELD = Identifier.fromNamespaceAndPath("bs3d_weights", "weight");
     /** 未登记物品的单件自重，单位克。 */
     public static final long DEFAULT_UNIT_GRAMS = 100;
     private static final Logger LOGGER = LoggerFactory.getLogger(WeightRules.class);
     // 按物品类型缓存注册字段解析结果；资源重载可在工作线程执行，因此缓存支持并发清理。
     private final Map<Item, OptionalLong> registeredWeights = new ConcurrentHashMap<>();
     private volatile List<WeightRule> rules = List.of();
-
-    @Override
-    public ResourceLocation getFabricId() {
-        return new ResourceLocation("bs3d_weights", "rules");
-    }
 
     @Override
     public void onResourceManagerReload(ResourceManager resources) {
@@ -51,7 +46,7 @@ public final class WeightRules implements SimpleSynchronousResourceReloadListene
         registeredWeights.clear();
     }
 
-    private static WeightRule read(ResourceLocation id, Resource resource) {
+    private static WeightRule read(Identifier id, Resource resource) {
         // 文件层只负责关闭资源与补充路径，字段解析的意图留在 WeightRule 中。
         try (var reader = resource.openAsReader()) {
             var json = GsonHelper.convertToJsonObject(JsonParser.parseReader(reader), "重量规则");
@@ -81,7 +76,7 @@ public final class WeightRules implements SimpleSynchronousResourceReloadListene
 
     private OptionalLong readRegistered(Item item) {
         // 每轮规则加载中每种物品只解析一次，避免服务端每次 tick 重复刷出相同警告。
-        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
+        Identifier itemId = BuiltInRegistries.ITEM.getKey(item);
         var field = ItemMetadata.of(new ItemStack(item)).optional(WEIGHT_FIELD);
         if (field.isEmpty()) {
             LOGGER.warn("物品 {} 未注册 optional 字段 {}；回退到数据包规则，无匹配时使用默认 {} 克",

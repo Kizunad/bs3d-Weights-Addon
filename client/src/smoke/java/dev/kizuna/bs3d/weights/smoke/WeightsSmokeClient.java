@@ -20,15 +20,17 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
@@ -73,6 +75,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private String oldSession;
     private long authorityRevision;
     private CompletableFuture<Boolean> rejectedSubscription;
+    private UUID host;
 
     @Override
     public void onInitializeClient() {
@@ -90,19 +93,23 @@ public final class WeightsSmokeClient implements ClientModInitializer {
             throw new IllegalStateException("重量验收超时 stage=" + stage
                     + " protocol=" + InventoryUiClient.runtime().protocolError());
         }
-        if (client.screen instanceof AccessibilityOnboardingScreen) {
-            client.setScreen(new TitleScreen());
+        if (client.gui.screen() instanceof AccessibilityOnboardingScreen) {
+            client.gui.setScreen(new TitleScreen());
         }
-        if (stage == Stage.CONNECT && client.screen instanceof TitleScreen && client.getOverlay() == null) {
+        if (stage == Stage.CONNECT && client.gui.screen() instanceof TitleScreen && client.gui.overlay() == null) {
             stage = Stage.INITIAL_STATE;
             if (integrated) {
-                var info = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
-                        new GameRules(), WorldDataConfiguration.DEFAULT);
+                var info = new LevelSettings(WORLD, GameType.CREATIVE,
+                        new LevelSettings.DifficultySettings(Difficulty.PEACEFUL, false /* hardcore */, false /* locked */),
+                        true /* allowCommands */, WorldDataConfiguration.DEFAULT);
                 client.createWorldOpenFlows().createFreshLevel(WORLD, info, new WorldOptions(1L, false, false),
-                        registry -> registry.registryOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT).createWorldDimensions());
+                        registry -> registry.lookupOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT)
+                                .value()
+                                .createWorldDimensions(),
+                        new TitleScreen());
             } else {
                 ConnectScreen.startConnecting(new TitleScreen(), client, ServerAddress.parseString(ADDRESS),
-                        new ServerData("Weights smoke", ADDRESS, false), false);
+                        new ServerData("Weights smoke", ADDRESS, ServerData.Type.OTHER), false, null);
             }
         }
         var modules = FabricLoader.getInstance().getEntrypoints("kizuna_inventory_ui", ClientModule.class);
@@ -116,17 +123,18 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 .map(VolumeModule.class::cast)
                 .findFirst()
                 .orElseThrow();
-        if (stage == Stage.REOPEN_WORLD && client.player == null && client.getOverlay() == null) {
+        if (stage == Stage.REOPEN_WORLD && client.player == null && client.gui.overlay() == null) {
+            // 断线会等内置服务器停服保存完毕才返回，此时世界文件已落盘，可以安全改写。
             require(weights.state().getStatus() == Status.STATUS_UNSPECIFIED, "断线没有清空重量");
-            staleHostLevelData(client);
+            stalePlayerBackup(client, host);
             stage = Stage.WORLD_RESTORED;
-            client.createWorldOpenFlows().loadLevel(new TitleScreen(), WORLD);
+            client.createWorldOpenFlows().openWorld(WORLD, () -> client.gui.setScreen(new TitleScreen()));
             return;
         }
         if (client.player == null || !volume.ready() || weights.state().getStatus() != Status.OK) {
             return;
         }
-        client.getToasts().clear();
+        client.gui.toastManager().clear();
         switch (stage) {
             case INITIAL_STATE -> {
                 // 初始树来自真实服务端库存，包含通过 optional 字段登记的金锭重量。
@@ -166,10 +174,10 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 require(!descriptionKey.isEmpty(), "草包没有登记描述键");
                 String description = Component.translatable(descriptionKey).getString();
                 require(!description.equals(descriptionKey), "物品描述缺少当前语言资源");
-                require(stack.getTooltipLines(client.player, TooltipFlag.NORMAL).stream()
+                require(stack.getTooltipLines(Item.TooltipContext.of(client.level), client.player, TooltipFlag.NORMAL).stream()
                         .anyMatch(line -> line.getString().equals(description)), "原版 tooltip 没有追加注册描述");
                 volume.open();
-                ((VolumeScreen) client.screen).openContainer(pouch);
+                ((VolumeScreen) client.gui.screen()).openContainer(pouch);
                 // 即时事务没有可取消阶段；改用不存在的物品触发服务端拒绝，验证未提交的转移不改重量。
                 volume.move(UUID.randomUUID().toString(), pouch, Volumes.cell(0, 0, 0), true);
                 stage = Stage.TRANSFER_REJECTED;
@@ -213,6 +221,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 }
                 screenshot(client);
                 oldSession = weights.state().getSession();
+                host = client.player.getUUID();
                 stage = Stage.DISCONNECT;
             }
             case DISCONNECT -> {
@@ -229,23 +238,26 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 }
             }
             case WORLD_RESTORED -> {
-                // 新会话须读取已提交 playerdata，不能被较旧的 level.dat 回滚。
+                // 新会话须读取已提交 playerdata，不能被较旧的备份回滚。
                 require(!oldSession.equals(weights.state().getSession()), "重开世界沿用了旧连接");
-                require(volume.state().getRevision() == 2, "较旧 level.dat 回滚了库存事务");
+                require(volume.state().getRevision() == 2, "较旧的 playerdata 备份回滚了库存事务");
                 require(weights.state().getTotalGrams() == RELOADED_TOTAL_GRAMS, "单机重开重量没有恢复");
-                finish(client, "integrated: all dedicated checks plus world restart, stale level.dat recovery, new session passed");
+                finish(client, "integrated: all dedicated checks plus world restart, stale playerdata backup ignored, new session passed");
             }
             default -> { }
         }
     }
 
-    private static void staleHostLevelData(Minecraft client) {
-        // 仅修改本次新建的隔离世界，模拟 level.dat 尚未跟上已提交 playerdata 的崩溃窗口。
-        var file = client.gameDirectory.toPath().resolve("saves/" + WORLD + "/level.dat");
+    private static void stalePlayerBackup(Minecraft client, UUID host) {
+        // 26.x 房主也只存 players/data，level.dat 不再带 Player；先确认旧的覆盖来源确实不存在。
+        // 再把同目录的 .dat_old 换成空玩家数据，模拟备份尚未跟上已提交事务；仅改本次新建的隔离世界。
+        var world = client.gameDirectory.toPath().resolve("saves").resolve(WORLD);
         try {
-            var level = NbtIo.readCompressed(file.toFile());
-            level.getCompound("Data").put("Player", new CompoundTag());
-            NbtIo.writeCompressed(level, file.toFile());
+            var level = NbtIo.readCompressed(world.resolve("level.dat"), NbtAccounter.unlimitedHeap());
+            require(!level.getCompound("Data").orElseThrow().contains("Player"), "level.dat 仍保存房主玩家数据");
+            var players = world.resolve("players/data");
+            require(Files.isRegularFile(players.resolve(host + ".dat")), "房主 playerdata 不存在");
+            NbtIo.writeCompressed(new CompoundTag(), players.resolve(host + ".dat_old"));
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
@@ -253,7 +265,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
 
     private static void screenshot(Minecraft client) {
         // 抓取真实帧缓冲，产物留在夹具目录供人工查看。
-        Screenshot.grab(client.gameDirectory, "weights.png", client.getMainRenderTarget(), message -> {});
+        Screenshot.grab(client.gameDirectory, "weights.png", client.gameRenderer.mainRenderTarget(), 1, message -> {});
     }
 
     private void finish(Minecraft client, String result) {
@@ -269,11 +281,8 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     }
 
     private static void disconnect(Minecraft client) {
-        // 先关闭世界连接，内置服务器才会开始停服；客户端随后等待保存完成。
-        if (client.level != null) {
-            client.level.disconnect();
-        }
-        client.clearLevel(new TitleScreen());
+        // 单机时原版先停内置服务器并等待保存完成，再回到标题页。
+        client.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
     }
 
     private static void require(boolean condition, String reason) {

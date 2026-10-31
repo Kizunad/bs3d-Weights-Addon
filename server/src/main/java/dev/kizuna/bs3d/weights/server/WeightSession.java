@@ -72,7 +72,8 @@ final class WeightSession implements ServerModuleSession<ServerPlayer> {
         WeightState next;
         try {
             // 屏幕光标也是玩家携带的真实栈，拿起原版物品时总重不能临时消失。
-            next = calculator.calculate(InventoryAccess.snapshot(player), player.containerMenu.getCarried());
+            next = calculator.calculate(
+                    InventoryAccess.snapshot(player), player.containerMenu.getCarried(), player.registryAccess());
         } catch (IllegalArgumentException | ArithmeticException | UncheckedIOException invalid) {
             next = WeightState.newBuilder().setStatus(Status.INVALID_INVENTORY).build();
             if (previous == null || previous.getStatus() != Status.INVALID_INVENTORY) {

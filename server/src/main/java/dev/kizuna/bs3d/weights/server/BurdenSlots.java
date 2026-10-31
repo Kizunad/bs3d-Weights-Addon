@@ -11,6 +11,8 @@ import java.util.Optional;
  */
 record BurdenSlots(int mainEnd) {
     static final String POCKET_MOD_ID = "bs3d_pocket";
+    // 26.x 玩家库存槽数：主库存之后依次是四格盔甲、副手、身体盔甲与鞍，与 Inventory.getContainerSize 相同。
+    static final int PLAYER_SLOTS = Inventory.INVENTORY_SIZE + Inventory.EQUIPMENT_SLOT_MAPPING.size();
     // 与 bs3d_pocket 的 PocketSlots.VISIBLE_MAIN_SLOTS 相同：快捷栏之外只保留一行 9 格。
     static final int POCKET_MAIN_SLOTS = 9;
     static final BurdenSlots VANILLA = new BurdenSlots(Inventory.INVENTORY_SIZE);
@@ -22,8 +24,8 @@ record BurdenSlots(int mainEnd) {
     }
 
     Optional<BurdenSource> source(int slot) {
-        // 原版槽号依次为快捷栏、主库存、盔甲、副手；Pocket 已移除的旧主库存槽不属于任何来源。
-        if (slot < 0 || slot > Inventory.SLOT_OFFHAND) {
+        // 原版槽号依次为快捷栏、主库存、盔甲、副手、身体盔甲与鞍；Pocket 已移除的旧主库存槽不属于任何来源。
+        if (slot < 0 || slot >= PLAYER_SLOTS) {
             throw new IllegalArgumentException("槽号超出原版玩家库存：" + slot);
         }
         if (slot < Inventory.getSelectionSize()) {
@@ -38,6 +40,10 @@ record BurdenSlots(int mainEnd) {
         if (slot < Inventory.SLOT_OFFHAND) {
             return Optional.of(BurdenSource.ARMOR);
         }
-        return Optional.of(BurdenSource.OFFHAND);
+        if (slot == Inventory.SLOT_OFFHAND) {
+            return Optional.of(BurdenSource.OFFHAND);
+        }
+        // 身体盔甲与鞍是坐骑用的装备槽，玩家正常穿不上；若有物品照计实重，但不属于任何有效负重来源。
+        return Optional.empty();
     }
 }

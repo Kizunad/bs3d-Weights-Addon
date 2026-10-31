@@ -2,6 +2,30 @@
 
 状态：2026-10-14 初版源码，尚未发布版本；配套基础源码已公开，兼容提交见[安装指南](Getting-Started.md)。
 
+## 2026-11-01：迁移到 Minecraft 26.2 / Java 25
+
+运行环境改为 Minecraft 26.2、Fabric Loader 0.20.1、Fabric API 0.161.0+26.2、owo 0.13.1+26.2、Java 25，构建使用 Gradle 9.8.0、Fabric Loom 1.19.3。重量规则、系数表、Addon 协议 v1 与显示不变，配套 Inventory UI Framework 与 BS3D 为同日迁移的 26.2 版本。
+
+随 26.2 调整的地方：
+
+- 规则重载改用 Fabric resource-loader v1 的 `ResourceLoader` 登记（ID `bs3d_weights:rules`），规则类改实现原版 `ResourceManagerReloadListener`。
+- BS3D 容器内容改按数据组件编码，`WeightCalculator.calculate` 增加注册表参数，订阅会话与 `Burden` 传入玩家的注册表。
+- 26.2 玩家库存在副手之后另有身体盔甲（41 号）与鞍（42 号）两格，`InventoryAccess` 快照随之为 43 格。这两格计入实重、不属于任何有效负重来源；越界槽号判断改为 43 格。
+- 示例与夹具数据包的 `pack.mcmeta` 改用 26.x 的 `min_format`/`max_format`。
+
+Java 25 `test build :client:compileSmokeJava :server:compileSmokeJava` 通过：服务端 **27 项**、客户端 **5 项**，共 **32 项测试**，与迁移前相同，无失败或跳过。服务端测试改为每个测试类独占 JVM：物品登记须在注册表冻结前，标签绑定须在冻结后。两端安装产物为 `jar` 任务输出，均不含 smoke 夹具或 refmap；专服 JAR 不含客户端或 owo 类，两端都内嵌 tomlj 与 ANTLR 运行库。
+
+真实 Fabric 专服与 Xvfb（llvmpipe 软件渲染）客户端联调两种模式均通过：
+
+- `build/smoke/861ea22efb89-dedicated/client/weights-ok.txt`
+- `build/smoke/c864222f879a-integrated/client/weights-ok.txt`
+
+覆盖项与此前相同：注册金锭后初始 5750 g、伪造订阅被拒、转移拒绝与提交、嵌套计重、数据包热重载后 8750 g、Protobuf 与界面文字。缺少字段的石头、背篓和草包首次计重各告警一次，每次成功重载后再告警一次，日志次数与迁移前相同。
+
+单机重开一步按 26.2 的存档方式改写。26.2 的房主与其他玩家一样只存 `players/data/<UUID>.dat`，`level.dat` 不再带 `Player`，原先「把 level.dat.Player 改旧」所模拟的覆盖来源已不存在。探针现在先确认 `level.dat` 没有 `Player`、房主 playerdata 存在，再把同目录的 `.dat_old` 备份换成空玩家数据；重开后要求得到新连接会话，库存修订号仍为 2，总重仍为 8.75 kg。
+
+两种模式的 `weights.png` 与 2026-10-31 的 1.20.1 截图对比：总览「实重 8.75 kg / 负重 4.25 kg」、草包标题「4.25 kg」、人物与内景布局一致。天空多了云层（26.2 在渲染距离 2 时也绘制云）；内景底面与石块的明暗略有不同，来自 BS3D 内景渲染。未在 Windows 实例上验证。
+
 ## 有效负重
 
 2026-10-30 源码新增有效负重，尚无正式发布版本。Java 17 `test build` 通过 **32 项**测试（服务端 27，客户端 5），其中新增 `BurdenTest` 7 项：
@@ -72,7 +96,7 @@ python3 scripts/wiki.py check
 python3 scripts/smoke.py
 ```
 
-`--java-home` 可指定运行 Gradle 的 JDK（Loom 1.13 起须为 Java 21），省略时沿用当前环境。
+`--java-home` 可指定运行 Gradle 的 JDK（Loom 1.19 与 Minecraft 26.2 须为 Java 25），省略时沿用当前环境。
 
 smoke 在全新 `build/smoke/<run-id>-<mode>/` 创建世界，默认端口 25583，仅 Linux Xvfb 自动运行。端口冲突时可通过 `--port` 改用其他端口，客户端与独服统一使用该值；不连接或停止占用端口的现有服务器。它会生成物品、测试计时转移与取消、通过数据包热重载改重量，并在完成后正常退出。测试源码不打入生产 JAR，不能用它替代玩家手动体验。
 

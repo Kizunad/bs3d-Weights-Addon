@@ -13,7 +13,7 @@ import dev.kizuna.inventoryui.protocol.UiWire;
 import dev.kizuna.inventoryui.registry.FrameworkCatalog;
 import java.util.Set;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /** 附属只提供背包页文字，不新增厚面板，不恢复被隐藏的原版 HUD。 */
 public final class WeightsClient implements ClientModule, ContainerDetails.Provider {
@@ -35,7 +35,7 @@ public final class WeightsClient implements ClientModule, ContainerDetails.Provi
                 WeightMessages.VERSION, UiMessageRouter.Direction.SERVER_TO_CLIENT, WeightState.class, view::accept);
         bindings.message(new UiWire.Contract<>(subscribe, UiWire.Codec.protobuf(SubscribeRequest.getDefaultInstance()), false));
         bindings.message(new UiWire.Contract<>(state, UiWire.Codec.protobuf(WeightState.getDefaultInstance()), false));
-        ContainerDetails.register(new ResourceLocation("bs3d_weights", "weights"), this);
+        ContainerDetails.register(Identifier.fromNamespaceAndPath("bs3d_weights", "weights"), this);
     }
 
     @Override
