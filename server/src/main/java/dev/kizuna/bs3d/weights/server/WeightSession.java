@@ -9,25 +9,25 @@ import dev.kizuna.inventoryui.server.ServerConnection;
 import dev.kizuna.inventoryui.server.ServerModuleSession;
 import dev.kizuna.inventoryui.server.ServerRequest;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 import java.io.UncheckedIOException;
 
 /** 每连接独立订阅、去重和修订号，断线后不保留旧世界数据。 */
-final class WeightSession implements ServerModuleSession<ServerPlayerEntity> {
+final class WeightSession implements ServerModuleSession<ServerPlayer> {
     private static final Logger LOGGER = LoggerFactory.getLogger("bs3d_weights");
     // 20 TPS 下最多每 250 ms 检查一次；未变化的结果不发包。Burden API 沿用同一间隔。
     static final int UPDATE_INTERVAL_TICKS = 5;
     private final MinecraftServer server;
-    private final ServerConnection<ServerPlayerEntity> connection;
+    private final ServerConnection<ServerPlayer> connection;
     private final WeightCalculator calculator;
     private WeightState previous;
     private long revision;
     private int elapsedTicks;
     private boolean subscribed;
 
-    WeightSession(MinecraftServer server, ServerConnection<ServerPlayerEntity> connection, WeightCalculator calculator) {
+    WeightSession(MinecraftServer server, ServerConnection<ServerPlayer> connection, WeightCalculator calculator) {
         this.server = server;
         this.connection = connection;
         this.calculator = calculator;
@@ -38,7 +38,7 @@ final class WeightSession implements ServerModuleSession<ServerPlayerEntity> {
     }
 
     @Override
-    public boolean handle(ServerRequest<ServerPlayerEntity> request) {
+    public boolean handle(ServerRequest<ServerPlayer> request) {
         // 客户端只能订阅自己；不给选择玩家、发送重量或改规则的消息入口。
         if (!request.message().equals(WeightMessages.SUBSCRIBE)) {
             return false;
@@ -72,11 +72,11 @@ final class WeightSession implements ServerModuleSession<ServerPlayerEntity> {
         WeightState next;
         try {
             // 屏幕光标也是玩家携带的真实栈，拿起原版物品时总重不能临时消失。
-            next = calculator.calculate(InventoryAccess.snapshot(player), player.currentScreenHandler.getCursorStack());
+            next = calculator.calculate(InventoryAccess.snapshot(player), player.containerMenu.getCarried());
         } catch (IllegalArgumentException | ArithmeticException | UncheckedIOException invalid) {
             next = WeightState.newBuilder().setStatus(Status.INVALID_INVENTORY).build();
             if (previous == null || previous.getStatus() != Status.INVALID_INVENTORY) {
-                LOGGER.warn("玩家 {} 的重量暂不可用", player.getUuid(), invalid);
+                LOGGER.warn("玩家 {} 的重量暂不可用", player.getUUID(), invalid);
             }
         }
         if (!force && next.equals(previous)) {

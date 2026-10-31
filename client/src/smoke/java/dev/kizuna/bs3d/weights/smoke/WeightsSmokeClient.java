@@ -15,25 +15,25 @@ import dev.kizuna.inventoryui.client.InventoryUiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
-import net.minecraft.client.gui.screen.ConnectScreen;
-import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.network.ServerAddress;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.client.util.ScreenshotRecorder;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.client.item.TooltipContext;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.resource.DataConfiguration;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.GameRules;
-import net.minecraft.world.gen.GeneratorOptions;
-import net.minecraft.world.gen.WorldPresets;
-import net.minecraft.world.level.LevelInfo;
-import net.minecraft.text.Text;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -81,7 +81,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
     }
 
-    private void tick(MinecraftClient client) {
+    private void tick(Minecraft client) {
         // 每个阶段先等真实服务器状态，再执行一个动作；超时给出阶段和路由诊断。
         if (started == 0) {
             started = System.currentTimeMillis();
@@ -90,19 +90,19 @@ public final class WeightsSmokeClient implements ClientModInitializer {
             throw new IllegalStateException("重量验收超时 stage=" + stage
                     + " protocol=" + InventoryUiClient.runtime().protocolError());
         }
-        if (client.currentScreen instanceof AccessibilityOnboardingScreen) {
+        if (client.screen instanceof AccessibilityOnboardingScreen) {
             client.setScreen(new TitleScreen());
         }
-        if (stage == Stage.CONNECT && client.currentScreen instanceof TitleScreen && client.getOverlay() == null) {
+        if (stage == Stage.CONNECT && client.screen instanceof TitleScreen && client.getOverlay() == null) {
             stage = Stage.INITIAL_STATE;
             if (integrated) {
-                var info = new LevelInfo(WORLD, GameMode.CREATIVE, false, Difficulty.PEACEFUL, true,
-                        new GameRules(), DataConfiguration.SAFE_MODE);
-                client.createIntegratedServerLoader().createAndStart(WORLD, info, new GeneratorOptions(1L, false, false),
-                        registry -> registry.get(RegistryKeys.WORLD_PRESET).getOrThrow(WorldPresets.FLAT).createDimensionsRegistryHolder());
+                var info = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
+                        new GameRules(), WorldDataConfiguration.DEFAULT);
+                client.createWorldOpenFlows().createFreshLevel(WORLD, info, new WorldOptions(1L, false, false),
+                        registry -> registry.registryOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT).createWorldDimensions());
             } else {
-                ConnectScreen.connect(new TitleScreen(), client, ServerAddress.parse(ADDRESS),
-                        new ServerInfo("Weights smoke", ADDRESS, false), false);
+                ConnectScreen.startConnecting(new TitleScreen(), client, ServerAddress.parseString(ADDRESS),
+                        new ServerData("Weights smoke", ADDRESS, false), false);
             }
         }
         var modules = FabricLoader.getInstance().getEntrypoints("kizuna_inventory_ui", ClientModule.class);
@@ -120,13 +120,13 @@ public final class WeightsSmokeClient implements ClientModInitializer {
             require(weights.state().getStatus() == Status.STATUS_UNSPECIFIED, "断线没有清空重量");
             staleHostLevelData(client);
             stage = Stage.WORLD_RESTORED;
-            client.createIntegratedServerLoader().start(new TitleScreen(), WORLD);
+            client.createWorldOpenFlows().loadLevel(new TitleScreen(), WORLD);
             return;
         }
         if (client.player == null || !volume.ready() || weights.state().getStatus() != Status.OK) {
             return;
         }
-        client.getToastManager().clear();
+        client.getToasts().clear();
         switch (stage) {
             case INITIAL_STATE -> {
                 // 初始树来自真实服务端库存，包含通过 optional 字段登记的金锭重量。
@@ -134,7 +134,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     return;
                 }
                 require(weights.state().getContainersCount() == 3, "没有递归统计三个容器");
-                require(integrated == client.isInSingleplayer(), "运行环境不符合验收要求");
+                require(integrated == client.isLocalServer(), "运行环境不符合验收要求");
                 // 将伪造的重量值夹在空订阅的未知字段中，必须被逻辑服务器拒绝。
                 authorityRevision = weights.state().getRevision();
                 var forged = SubscribeRequest.newBuilder()
@@ -164,12 +164,12 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 var stack = volume.stack(pouch);
                 String descriptionKey = ItemMetadata.of(stack).descriptionTranslationKey();
                 require(!descriptionKey.isEmpty(), "草包没有登记描述键");
-                String description = Text.translatable(descriptionKey).getString();
+                String description = Component.translatable(descriptionKey).getString();
                 require(!description.equals(descriptionKey), "物品描述缺少当前语言资源");
-                require(stack.getTooltip(client.player, TooltipContext.BASIC).stream()
+                require(stack.getTooltipLines(client.player, TooltipFlag.NORMAL).stream()
                         .anyMatch(line -> line.getString().equals(description)), "原版 tooltip 没有追加注册描述");
                 volume.open();
-                ((VolumeScreen) client.currentScreen).openContainer(pouch);
+                ((VolumeScreen) client.screen).openContainer(pouch);
                 // 即时事务没有可取消阶段；改用不存在的物品触发服务端拒绝，验证未提交的转移不改重量。
                 volume.move(UUID.randomUUID().toString(), pouch, Volumes.cell(0, 0, 0), true);
                 stage = Stage.TRANSFER_REJECTED;
@@ -197,7 +197,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                     return;
                 }
                 require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "容器间转移重复计重");
-                client.getNetworkHandler().sendChatCommand("weights-fixture-reload");
+                client.getConnection().sendCommand("weights-fixture-reload");
                 stage = Stage.RULES_RELOADED;
             }
             case RULES_RELOADED -> {
@@ -239,41 +239,41 @@ public final class WeightsSmokeClient implements ClientModInitializer {
         }
     }
 
-    private static void staleHostLevelData(MinecraftClient client) {
+    private static void staleHostLevelData(Minecraft client) {
         // 仅修改本次新建的隔离世界，模拟 level.dat 尚未跟上已提交 playerdata 的崩溃窗口。
-        var file = client.runDirectory.toPath().resolve("saves/" + WORLD + "/level.dat");
+        var file = client.gameDirectory.toPath().resolve("saves/" + WORLD + "/level.dat");
         try {
             var level = NbtIo.readCompressed(file.toFile());
-            level.getCompound("Data").put("Player", new NbtCompound());
+            level.getCompound("Data").put("Player", new CompoundTag());
             NbtIo.writeCompressed(level, file.toFile());
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
     }
 
-    private static void screenshot(MinecraftClient client) {
+    private static void screenshot(Minecraft client) {
         // 抓取真实帧缓冲，产物留在夹具目录供人工查看。
-        ScreenshotRecorder.saveScreenshot(client.runDirectory, "weights.png", client.getFramebuffer(), message -> {});
+        Screenshot.grab(client.gameDirectory, "weights.png", client.getMainRenderTarget(), message -> {});
     }
 
-    private void finish(MinecraftClient client, String result) {
+    private void finish(Minecraft client, String result) {
         // 通过标记只属于这次隔离运行；随后按原版顺序断线、保存并结束客户端。
         try {
-            Files.writeString(client.runDirectory.toPath().resolve("weights-ok.txt"), result);
+            Files.writeString(client.gameDirectory.toPath().resolve("weights-ok.txt"), result);
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
         stage = Stage.FINISHED;
         disconnect(client);
-        client.scheduleStop();
+        client.stop();
     }
 
-    private static void disconnect(MinecraftClient client) {
+    private static void disconnect(Minecraft client) {
         // 先关闭世界连接，内置服务器才会开始停服；客户端随后等待保存完成。
-        if (client.world != null) {
-            client.world.disconnect();
+        if (client.level != null) {
+            client.level.disconnect();
         }
-        client.disconnect(new TitleScreen());
+        client.clearLevel(new TitleScreen());
     }
 
     private static void require(boolean condition, String reason) {

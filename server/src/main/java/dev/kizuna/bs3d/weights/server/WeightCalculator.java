@@ -6,7 +6,6 @@ import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.ContainerWeight;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.Status;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.WeightState;
-import net.minecraft.item.ItemStack;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -15,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.ToLongFunction;
+import net.minecraft.world.item.ItemStack;
 
 /** 从真实库存树自底向上累计，每个根只加入总重一次；有效负重按根所在来源加权。 */
 public final class WeightCalculator {
@@ -90,7 +90,7 @@ public final class WeightCalculator {
             if (visitedStacks > MAX_VISITED_STACKS) {
                 throw new IllegalArgumentException("重量计算访问的物品栈数量超过上限");
             }
-            if (stack.getCount() > stack.getMaxCount()) {
+            if (stack.getCount() > stack.getMaxStackSize()) {
                 throw new IllegalArgumentException("物品堆叠数量超过该物品的上限");
             }
             long unit = unitGrams.applyAsLong(stack);
@@ -122,7 +122,7 @@ public final class WeightCalculator {
             long total = Math.addExact(own, contents);
             containers.add(ContainerWeight.newBuilder()
                     .setContainerId(id)
-                    .setTitle(stack.getName().getString())
+                    .setTitle(stack.getHoverName().getString())
                     .setContentsGrams(contents)
                     .setTotalGrams(total)
                     .setCarried(carried)

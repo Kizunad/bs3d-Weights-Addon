@@ -1,13 +1,13 @@
 package dev.kizuna.bs3d.weights.server;
 
 import com.google.gson.JsonObject;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.JsonHelper;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.util.GsonHelper;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * 一个规则恰好选择一种物品或一个 tag。
@@ -19,27 +19,27 @@ import net.minecraft.util.JsonHelper;
  * @param priority 匹配优先级，越大越先匹配
  */
 record WeightRule(
-        Identifier resource,
-        Identifier item,
+        ResourceLocation resource,
+        ResourceLocation item,
         TagKey<Item> tag,
         long grams,
         int priority) {
     static final long MAX_UNIT_GRAMS = 1_000_000_000L;
 
-    static WeightRule read(Identifier resource, JsonObject json) {
+    static WeightRule read(ResourceLocation resource, JsonObject json) {
         // 先确定选择器，再读取有明确单位的重量，最后读取匹配优先级。
         if (json.has("item") == json.has("tag")) {
             throw new IllegalArgumentException("必须且只能设置 item 或 tag");
         }
-        Identifier item = null;
+        ResourceLocation item = null;
         TagKey<Item> tag = null;
         if (json.has("item")) {
             item = identifier(json, "item");
-            if (!Registries.ITEM.containsId(item)) {
+            if (!BuiltInRegistries.ITEM.containsKey(item)) {
                 throw new IllegalArgumentException("item 未注册：" + item);
             }
         } else {
-            tag = TagKey.of(RegistryKeys.ITEM, identifier(json, "tag"));
+            tag = TagKey.create(Registries.ITEM, identifier(json, "tag"));
         }
         long grams = grams(json);
         int priority = 0;
@@ -62,9 +62,9 @@ record WeightRule(
         return grams;
     }
 
-    private static Identifier identifier(JsonObject json, String field) {
+    private static ResourceLocation identifier(JsonObject json, String field) {
         // 无效 ID 连同字段名报错，不能把拼错的物品名当作默认重量。
-        var id = Identifier.tryParse(JsonHelper.getString(json, field));
+        var id = ResourceLocation.tryParse(GsonHelper.getAsString(json, field));
         if (id == null) {
             throw new IllegalArgumentException(field + " 必须是有效的资源 ID");
         }
@@ -86,6 +86,6 @@ record WeightRule(
 
     boolean matches(ItemStack stack) {
         // 选择器在读取时已保证互斥；按注册类型或原版标签匹配，不使用展示名。
-        return item != null ? Registries.ITEM.getId(stack.getItem()).equals(item) : stack.isIn(tag);
+        return item != null ? BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(item) : stack.is(tag);
     }
 }

@@ -7,9 +7,9 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.resource.ResourceType;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackType;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,7 +25,7 @@ public final class WeightsServer implements ModInitializer, FabricServerModule {
     @Override
     public void onInitialize() {
         // 数据包属于逻辑服务器；客户端配置不能覆盖服务端规则。
-        ResourceManagerHelper.get(ResourceType.SERVER_DATA).registerReloadListener(RULES);
+        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(RULES);
         // 系数表与 Pocket 槽位范围在启动时确定一次；坏配置在进入世界前直接拒绝。
         var factors = BurdenFactors.load(FabricLoader.getInstance().getConfigDir().resolve(BURDEN_CONFIG));
         calculator = new WeightCalculator(RULES::unitGrams, BurdenSlots.detect(), factors);
@@ -39,7 +39,7 @@ public final class WeightsServer implements ModInitializer, FabricServerModule {
     }
 
     @Override
-    public void register(MinecraftServer server, ServerModuleRegistry<ServerPlayerEntity> registry) {
+    public void register(MinecraftServer server, ServerModuleRegistry<ServerPlayer> registry) {
         // 工厂只创建会话，订阅请求到达后才读取真实玩家并发送状态。
         registry.register(WeightMessages.MODULE, WeightMessages.capabilities(), connection -> {
             var session = new WeightSession(server, connection, calculator());

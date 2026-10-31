@@ -3,13 +3,13 @@ package dev.kizuna.bs3d.weights.server;
 import com.google.gson.JsonParser;
 import dev.kizuna.backpack3d.item.ItemMetadata;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.resource.Resource;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.JsonHelper;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.util.GsonHelper;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** /reload 后整体替换服务端规则；不向客户端发送或信任客户端重量配置。 */
 public final class WeightRules implements SimpleSynchronousResourceReloadListener {
     /** BS3D optional 中由本附属解释的字段，值为包含 grams 的 JSON 对象。 */
-    public static final Identifier WEIGHT_FIELD = new Identifier("bs3d_weights", "weight");
+    public static final ResourceLocation WEIGHT_FIELD = new ResourceLocation("bs3d_weights", "weight");
     /** 未登记物品的单件自重，单位克。 */
     public static final long DEFAULT_UNIT_GRAMS = 100;
     private static final Logger LOGGER = LoggerFactory.getLogger(WeightRules.class);
@@ -32,15 +32,15 @@ public final class WeightRules implements SimpleSynchronousResourceReloadListene
     private volatile List<WeightRule> rules = List.of();
 
     @Override
-    public Identifier getFabricId() {
-        return new Identifier("bs3d_weights", "rules");
+    public ResourceLocation getFabricId() {
+        return new ResourceLocation("bs3d_weights", "rules");
     }
 
     @Override
-    public void reload(ResourceManager resources) {
+    public void onResourceManagerReload(ResourceManager resources) {
         // 所有文件都成功后才发布新目录，重载失败时保留上一份可用规则。
         var next = new ArrayList<WeightRule>();
-        var files = resources.findResources("bs3d_weights/weights", id -> id.getPath().endsWith(".json"));
+        var files = resources.listResources("bs3d_weights/weights", id -> id.getPath().endsWith(".json"));
         for (var entry : files.entrySet()) {
             next.add(read(entry.getKey(), entry.getValue()));
         }
@@ -51,10 +51,10 @@ public final class WeightRules implements SimpleSynchronousResourceReloadListene
         registeredWeights.clear();
     }
 
-    private static WeightRule read(Identifier id, Resource resource) {
+    private static WeightRule read(ResourceLocation id, Resource resource) {
         // 文件层只负责关闭资源与补充路径，字段解析的意图留在 WeightRule 中。
-        try (var reader = resource.getReader()) {
-            var json = JsonHelper.asObject(JsonParser.parseReader(reader), "重量规则");
+        try (var reader = resource.openAsReader()) {
+            var json = GsonHelper.convertToJsonObject(JsonParser.parseReader(reader), "重量规则");
             return WeightRule.read(id, json);
         } catch (IOException | RuntimeException failure) {
             throw new IllegalArgumentException("无法加载重量规则 " + id + "：" + failure.getMessage(), failure);
@@ -81,7 +81,7 @@ public final class WeightRules implements SimpleSynchronousResourceReloadListene
 
     private OptionalLong readRegistered(Item item) {
         // 每轮规则加载中每种物品只解析一次，避免服务端每次 tick 重复刷出相同警告。
-        Identifier itemId = Registries.ITEM.getId(item);
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
         var field = ItemMetadata.of(new ItemStack(item)).optional(WEIGHT_FIELD);
         if (field.isEmpty()) {
             LOGGER.warn("物品 {} 未注册 optional 字段 {}；回退到数据包规则，无匹配时使用默认 {} 克",

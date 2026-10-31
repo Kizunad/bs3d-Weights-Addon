@@ -8,11 +8,11 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
-import net.minecraft.Bootstrap;
 import net.minecraft.SharedConstants;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import java.io.IOException;
@@ -23,9 +23,10 @@ import java.util.Map;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
+
 class BurdenTest {
     // 原版玩家库存：36 格主库存、4 格盔甲、1 格副手。
-    private static final int PLAYER_SLOTS = PlayerInventory.OFF_HAND_SLOT + 1;
+    private static final int PLAYER_SLOTS = Inventory.SLOT_OFFHAND + 1;
     private static final int HOTBAR_SLOT = 0;
     private static final int FIRST_MAIN_SLOT = 9;
     private static final int LAST_POCKET_SLOT = 17;
@@ -35,8 +36,8 @@ class BurdenTest {
     @BeforeAll
     static void bootstrap() {
         // 注册原版和 BS3D 物品后才构造真实 ItemStack 与容器。
-        SharedConstants.createGameVersion();
-        Bootstrap.initialize();
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         ContainerItems.initialize();
     }
 
@@ -48,7 +49,7 @@ class BurdenTest {
                 HOTBAR_SLOT, new ItemStack(Items.STONE, 2),
                 FIRST_MAIN_SLOT, new ItemStack(Items.STONE, 3),
                 ARMOR_SLOT, new ItemStack(Items.IRON_HELMET),
-                PlayerInventory.OFF_HAND_SLOT, new ItemStack(Items.IRON_SWORD)));
+                Inventory.SLOT_OFFHAND, new ItemStack(Items.IRON_SWORD)));
         var pouch = pouch(new ItemStack(Items.STONE, 3));
         var state = calculator.calculate(snapshot(slots, List.of(pouch)), new ItemStack(Items.STONE));
         assertEquals(2000 + 3000 + 250 + 250 + 1000 + 3250, state.getTotalGrams());
@@ -71,7 +72,7 @@ class BurdenTest {
     @Test
     void pocketKeepsOnlyTheFirstMainRow() throws IOException {
         // 范围由常量决定：原版主库存到 35 号槽，装了 Pocket 只到 17 号槽。
-        assertEquals(PlayerInventory.MAIN_SIZE, BurdenSlots.VANILLA.mainEnd());
+        assertEquals(Inventory.INVENTORY_SIZE, BurdenSlots.VANILLA.mainEnd());
         assertEquals(LAST_POCKET_SLOT + 1, BurdenSlots.POCKET.mainEnd());
         assertEquals(BurdenSlots.VANILLA, BurdenSlots.detect());
         var lastRow = slots(Map.of(LAST_POCKET_SLOT, new ItemStack(Items.STONE)));
@@ -128,7 +129,7 @@ class BurdenTest {
 
     private static long stoneOrSmall(ItemStack stack) {
         // 与 WeightCalculatorTest 相同的单重：石头 1000 克，其余 250 克。
-        return stack.isOf(Items.STONE) ? 1000 : 250;
+        return stack.is(Items.STONE) ? 1000 : 250;
     }
 
     private static BurdenFactors shipped() throws IOException {

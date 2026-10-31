@@ -12,7 +12,7 @@ weight.addProperty("grams", 1200);
 ItemMetadata.register(
         Items.IRON_SWORD,
         "item.example.iron_sword.description",
-        Map.of(new Identifier("bs3d_weights", "weight"), weight));
+        Map.of(new ResourceLocation("bs3d_weights", "weight"), weight));
 ```
 
 新容器使用 `ContainerItems.register` 最后的必填 `optional` 参数；不要在注册容器后重复补登记同一物品。通用字段表与描述的接口、资源准备和迁移说明见 BS3D 的物品扩展文档。BS3D 不依赖本附属，注册方可以使用字段 ID 字符串接入，无须引用附属类。

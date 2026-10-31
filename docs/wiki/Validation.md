@@ -23,7 +23,7 @@
 真实 Fabric 独服和单机验收通过，证据分别为 `build/smoke/f56921324191-dedicated/`、`build/smoke/f56921324191-integrated/`，各目录的 `client/weights-ok.txt` 已产生成功标记：
 
 - 在服务端真实库存增加两件通过 `optional` 登记为 375 克的金锭，初始总重为 5750 克，客户端显示来自 Protobuf 快照。
-- 草包描述键能够翻译，原版 `ItemStack.getTooltip` 包含注册描述；内景继续复用同一 tooltip 流程。
+- 草包描述键能够翻译，原版 `ItemStack.getTooltipLines` 包含注册描述；内景继续复用同一 tooltip 流程。
 - 缺少字段的石头、背篓和草包在服务端日志中各 WARN 一次；成功重载后重新告警，期间不按 tick 刷屏。
 - 伪造订阅被拒绝，修订和总重不变；被拒绝的转移与随后的提交、嵌套计重、服务端数据包重载通过，重载后总重为 8750 克。
 - 单机同世界重开、旧 level.dat 恢复及新连接会话通过，两端正常保存退出。

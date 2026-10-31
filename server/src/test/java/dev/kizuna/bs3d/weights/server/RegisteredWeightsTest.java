@@ -4,14 +4,14 @@ import com.google.gson.JsonParser;
 import dev.kizuna.backpack3d.item.ItemMetadata;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.SavedInventory;
 import dev.kizuna.backpack3d.server.InventoryAccess;
-import net.minecraft.Bootstrap;
 import net.minecraft.SharedConstants;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.resource.Resource;
-import net.minecraft.util.Identifier;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
@@ -35,8 +35,8 @@ class RegisteredWeightsTest {
     @BeforeAll
     static void bootstrap() {
         // 不覆盖其他测试使用的原版条目，每个注册一次的物品代表一种配置。
-        SharedConstants.createGameVersion();
-        Bootstrap.initialize();
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         invalidItems = List.of(Items.COAL, Items.CHARCOAL, Items.COPPER_INGOT, Items.IRON_NUGGET,
                 Items.GOLD_NUGGET, Items.QUARTZ, Items.AMETHYST_SHARD);
         register(Items.GOLD_INGOT, "{\"grams\":375}");
@@ -48,14 +48,14 @@ class RegisteredWeightsTest {
             register(invalidItems.get(index), invalid.get(index));
         }
         ItemMetadata.register(Items.EMERALD, "", Map.of(
-                new Identifier("another_addon", "weight"),
+                new ResourceLocation("another_addon", "weight"),
                 JsonParser.parseString("{\"grams\":999}").getAsJsonObject()));
     }
 
     @Test
     void registeredWeightWinsOverDataPackAndFeedsServerCalculation() {
         var rules = new WeightRules();
-        rules.reload(rule("minecraft:gold_ingot", "900"));
+        rules.onResourceManagerReload(rule("minecraft:gold_ingot", "900"));
         var stack = new ItemStack(Items.GOLD_INGOT, 3);
         var inventory = new InventoryAccess.Snapshot(
                 SavedInventory.getDefaultInstance(), List.of(stack), Map.of());
@@ -76,7 +76,7 @@ class RegisteredWeightsTest {
     @Test
     void invalidRegisteredFieldsWarnAndFallBack() {
         var rules = new WeightRules();
-        rules.reload(rule("minecraft:coal", "80"));
+        rules.onResourceManagerReload(rule("minecraft:coal", "80"));
         try (var warnings = new Warnings()) {
             for (var item : invalidItems) {
                 long expected = item == Items.COAL ? 80 : WeightRules.DEFAULT_UNIT_GRAMS;
@@ -102,11 +102,11 @@ class RegisteredWeightsTest {
             assertTrue(warnings.messages.get(0).contains("未注册 optional 字段 bs3d_weights:weight"));
 
             assertThrows(IllegalArgumentException.class,
-                    () -> rules.reload(rule("minecraft:emerald", "-1")));
+                    () -> rules.onResourceManagerReload(rule("minecraft:emerald", "-1")));
             assertEquals(100, rules.unitGrams(new ItemStack(Items.EMERALD)));
             assertEquals(1, warnings.messages.size());
 
-            rules.reload(rule("minecraft:emerald", "700"));
+            rules.onResourceManagerReload(rule("minecraft:emerald", "700"));
             assertEquals(700, rules.unitGrams(new ItemStack(Items.EMERALD)));
             assertEquals(2, warnings.messages.size());
         }
@@ -117,9 +117,9 @@ class RegisteredWeightsTest {
         var rules = new WeightRules();
         for (var item : List.of(Items.GOLD_INGOT, Items.EMERALD)) {
             var stack = new ItemStack(item);
-            var forged = new NbtCompound();
+            var forged = new CompoundTag();
             forged.putLong("grams", 0);
-            stack.getOrCreateSubNbt("optional").put("bs3d_weights:weight", forged);
+            stack.getOrCreateTagElement("optional").put("bs3d_weights:weight", forged);
             assertEquals(item == Items.GOLD_INGOT ? 375 : 100, rules.unitGrams(stack));
         }
     }
@@ -130,7 +130,7 @@ class RegisteredWeightsTest {
     }
 
     private static TestResources rule(String item, String grams) {
-        var id = new Identifier("test", "bs3d_weights/weights/registered.json");
+        var id = new ResourceLocation("test", "bs3d_weights/weights/registered.json");
         byte[] bytes = ("{\"item\":\"" + item + "\",\"grams\":" + grams + "}")
                 .getBytes(StandardCharsets.UTF_8);
         return new TestResources(Map.of(id, new Resource(null, () -> new ByteArrayInputStream(bytes))));

@@ -11,9 +11,9 @@ import dev.kizuna.inventoryui.client.ClientRuntime;
 import dev.kizuna.inventoryui.protocol.UiMessageRouter;
 import dev.kizuna.inventoryui.protocol.UiWire;
 import dev.kizuna.inventoryui.registry.FrameworkCatalog;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import java.util.Set;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 /** 附属只提供背包页文字，不新增厚面板，不恢复被隐藏的原版 HUD。 */
 public final class WeightsClient implements ClientModule, ContainerDetails.Provider {
@@ -35,7 +35,7 @@ public final class WeightsClient implements ClientModule, ContainerDetails.Provi
                 WeightMessages.VERSION, UiMessageRouter.Direction.SERVER_TO_CLIENT, WeightState.class, view::accept);
         bindings.message(new UiWire.Contract<>(subscribe, UiWire.Codec.protobuf(SubscribeRequest.getDefaultInstance()), false));
         bindings.message(new UiWire.Contract<>(state, UiWire.Codec.protobuf(WeightState.getDefaultInstance()), false));
-        ContainerDetails.register(new Identifier("bs3d_weights", "weights"), this);
+        ContainerDetails.register(new ResourceLocation("bs3d_weights", "weights"), this);
     }
 
     @Override
@@ -68,27 +68,27 @@ public final class WeightsClient implements ClientModule, ContainerDetails.Provi
     }
 
     @Override
-    public Text summary() {
+    public Component summary() {
         // 未同步或计算失败时不显示 0 kg，避免把未知重量误认为空背包。
         var state = view.state();
         return switch (state.getStatus()) {
-            case OK -> Text.literal("实重 " + WeightView.kilograms(state.getTotalGrams())
+            case OK -> Component.literal("实重 " + WeightView.kilograms(state.getTotalGrams())
                     + " / 负重 " + WeightView.kilograms(state.getEffectiveGrams()));
-            case INVALID_INVENTORY -> Text.literal("重量暂不可用：库存数据异常");
-            default -> Text.literal(status);
+            case INVALID_INVENTORY -> Component.literal("重量暂不可用：库存数据异常");
+            default -> Component.literal(status);
         };
     }
 
     @Override
-    public Text container(String id) {
+    public Component container(String id) {
         // 容器消失时完整快照会移除其条目，客户端不保留过期重量。
         if (view.state().getStatus() == Status.OK) {
             for (var container : view.state().getContainersList()) {
                 if (container.getContainerId().equals(id)) {
-                    return Text.literal(WeightView.kilograms(container.getTotalGrams()));
+                    return Component.literal(WeightView.kilograms(container.getTotalGrams()));
                 }
             }
         }
-        return Text.empty();
+        return Component.empty();
     }
 }

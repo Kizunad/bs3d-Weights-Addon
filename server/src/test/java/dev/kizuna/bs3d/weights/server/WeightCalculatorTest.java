@@ -8,11 +8,11 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
-import net.minecraft.Bootstrap;
 import net.minecraft.SharedConstants;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import java.util.List;
@@ -20,18 +20,19 @@ import java.util.Map;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
+
 class WeightCalculatorTest {
     // 系数全为 1 时有效负重等于实重，本类只验证实重；有效负重的系数表见 BurdenTest。
     private static final BurdenFactors UNIT_FACTORS = BurdenFactors.parse(
             "hotbar = 1\nmain = 1\narmor = 1\noffhand = 1\ncursor = 1\nworn_containers = 1\n");
     private final WeightCalculator calculator = new WeightCalculator(
-            stack -> stack.isOf(Items.STONE) ? 1000 : 250, BurdenSlots.VANILLA, UNIT_FACTORS);
+            stack -> stack.is(Items.STONE) ? 1000 : 250, BurdenSlots.VANILLA, UNIT_FACTORS);
 
     @BeforeAll
     static void bootstrap() {
         // 注册原版和 BS3D 物品后才构造真实 ItemStack，不能用假注册表替代规则。
-        SharedConstants.createGameVersion();
-        Bootstrap.initialize();
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         ContainerItems.initialize();
     }
 
@@ -88,7 +89,7 @@ class WeightCalculatorTest {
     @Test
     void corruptContentsNeverBecomeZeroWeight() {
         var pouch = ContainerItems.create(ContainerItems.POUCH);
-        pouch.getSubNbt("bs3d_container").putByteArray("contents", new byte[]{(byte) 0xff});
+        pouch.getTagElement("bs3d_container").putByteArray("contents", new byte[]{(byte) 0xff});
         assertThrows(IllegalArgumentException.class, () -> calculator.calculate(
                 snapshot(List.of(pouch), List.of(), Map.of()), ItemStack.EMPTY));
     }
@@ -135,7 +136,7 @@ class WeightCalculatorTest {
         return new InventoryAccess.Snapshot(saved.build(), slots, ground);
     }
 
-    private static ItemStack filled(Identifier type, ItemStack child) {
+    private static ItemStack filled(ResourceLocation type, ItemStack child) {
         // 容器子项沿用实例 UUID；普通物品使用独立条目身份，尺寸取真实定义。
         var stack = ContainerItems.create(type);
         var definition = ContainerItems.definition(child);

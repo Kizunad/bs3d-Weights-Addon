@@ -13,13 +13,13 @@ import dev.kizuna.bs3d.weights.server.WeightRules;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.commands.Commands;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.WorldSavePath;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.LevelResource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -39,27 +39,27 @@ public final class WeightsFixture implements ModInitializer {
         ItemMetadata.register(Items.GOLD_INGOT, "", Map.of(WeightRules.WEIGHT_FIELD, weight));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> seedInventory(handler.player));
         CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> {
-            dispatcher.register(CommandManager.literal("weights-fixture-reload")
-                    .requires(source -> source.hasPermissionLevel(ADMIN_PERMISSION_LEVEL))
+            dispatcher.register(Commands.literal("weights-fixture-reload")
+                    .requires(source -> source.hasPermission(ADMIN_PERMISSION_LEVEL))
                     .executes(context -> {
                         // 用真实数据包热重载改重量，客户端不会读取此文件。
                         var server = context.getSource().getServer();
                         writeReloadPack(server);
-                        server.getCommandManager().executeWithPrefix(server.getCommandSource(), "reload");
+                        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "reload");
                         return 1;
                     }));
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             // 专用夹具在客户端完成后正常停服；单机由 Minecraft 自己保存并关闭。
-            if (server.isDedicated()) {
-                server.execute(() -> server.stop(false));
+            if (server.isDedicatedServer()) {
+                server.execute(() -> server.halt(false));
             }
         });
     }
 
-    private static void seedInventory(ServerPlayerEntity player) {
+    private static void seedInventory(ServerPlayer player) {
         // 仅首次进入隔离世界时建夹具；重开世界必须保留之前的真实提交。
-        player.getServer().getPlayerManager().addToOperators(player.getGameProfile());
+        player.getServer().getPlayerList().op(player.getGameProfile());
         var account = new PlayerAccount(player);
         if (account.data().getRevision() != 0) {
             return;
@@ -89,7 +89,7 @@ public final class WeightsFixture implements ModInitializer {
 
     private static void writeReloadPack(MinecraftServer server) {
         // 单机和专服都写入本次世界的数据包目录，不改用户配置或基础规则文件。
-        var pack = server.getSavePath(WorldSavePath.ROOT).resolve("datapacks/weights-smoke");
+        var pack = server.getWorldPath(LevelResource.ROOT).resolve("datapacks/weights-smoke");
         try {
             Files.createDirectories(pack.resolve("data/smoke/bs3d_weights/weights"));
             Files.writeString(pack.resolve("pack.mcmeta"), """
@@ -103,7 +103,7 @@ public final class WeightsFixture implements ModInitializer {
         }
     }
 
-    private static ItemStack filled(Identifier type, ItemStack child) {
+    private static ItemStack filled(ResourceLocation type, ItemStack child) {
         // 保留子容器实例身份，普通物品才生成独立条目身份；占格使用 BS3D 定义。
         var container = ContainerItems.create(type);
         var definition = ContainerItems.definition(child);
