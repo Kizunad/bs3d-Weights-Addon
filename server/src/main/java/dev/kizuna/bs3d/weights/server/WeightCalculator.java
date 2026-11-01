@@ -3,7 +3,6 @@ package dev.kizuna.bs3d.weights.server;
 import dev.kizuna.backpack3d.item.ContainerItems;
 import dev.kizuna.backpack3d.protocol.StackCodec;
 import dev.kizuna.backpack3d.server.InventoryAccess;
-import dev.kizuna.backpack3d.service.RetiredContainers;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.ContainerWeight;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.Status;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.WeightState;
@@ -49,10 +48,6 @@ public final class WeightCalculator {
         }
         walk.carry(cursor, BurdenSource.CURSOR);
         for (var worn : inventory.equipment().getWornList()) {
-            // BS3D 已移除类型的旧容器原样留在存档里，解码不了也取不出，不计重；其余损坏数据照常整体拒绝。
-            if (RetiredContainers.is(worn.getStackNbt(), "身上")) {
-                continue;
-            }
             walk.carry(StackCodec.decode(worn.getStackNbt(), registries), BurdenSource.WORN_CONTAINERS);
         }
         // 地面容器仅产生明细，其子树也带 carried=false，不能混入随身总重。
@@ -128,9 +123,6 @@ public final class WeightCalculator {
             }
             long contents = 0;
             for (var item : ContainerItems.contents(stack).getItemsList()) {
-                if (RetiredContainers.is(item.getStackNbt(), "容器内")) {
-                    continue;
-                }
                 var child = StackCodec.decode(item.getStackNbt(), registries);
                 contents = Math.addExact(contents, stack(child, carried, depth + 1));
             }

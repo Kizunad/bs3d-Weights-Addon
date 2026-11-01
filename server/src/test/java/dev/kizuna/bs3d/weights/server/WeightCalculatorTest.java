@@ -1,6 +1,5 @@
 package dev.kizuna.bs3d.weights.server;
 
-import com.google.protobuf.ByteString;
 import dev.kizuna.backpack3d.item.ContainerItems;
 import dev.kizuna.backpack3d.protocol.StackCodec;
 import dev.kizuna.backpack3d.protocol.Volumes;
@@ -10,19 +9,12 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.NbtAccounter;
-import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -129,31 +121,6 @@ class WeightCalculatorTest {
     }
 
     @Test
-    void retiredBs3dContainersAreSkipped() {
-        // BS3D 2026-11-01 移除的草包、收纳箱在旧存档里原样保留：不计重，也不让整份结果变成不可用。
-        var basket = filled(BASKET, new ItemStack(Items.STONE));
-        var items = new ArrayList<>(ContainerItems.contents(basket).getItemsList());
-        items.add(Item.newBuilder()
-                .setId(UUID.randomUUID().toString())
-                .setContainer(ContainerItems.identity(basket))
-                .setBaseSize(Volumes.UNIT)
-                .setSize(Volumes.UNIT)
-                .setStackNbt(retired("bs3d:storage_box"))
-                .build());
-        ContainerItems.setContents(basket, items);
-        var inventory = snapshot(List.of(), List.of(basket), Map.of());
-        var equipment = inventory.equipment().toBuilder()
-                .addWorn(WornContainer.newBuilder()
-                        .setStackNbt(retired("bs3d:grass_pouch"))
-                        .setMount(Mount.WAIST_LEFT_FRONT))
-                .build();
-        var result = calculator.calculate(new InventoryAccess.Snapshot(equipment, inventory.playerSlots(), Map.of()),
-                ItemStack.EMPTY, TestRegistries.VANILLA);
-        assertEquals(1250, result.getTotalGrams());
-        assertEquals(1, result.getContainersCount());
-    }
-
-    @Test
     void emptyAndZeroWeightAreValid() {
         var zero = new WeightCalculator(stack -> 0, BurdenSlots.VANILLA, UNIT_FACTORS);
         assertEquals(0, zero.calculate(
@@ -170,20 +137,6 @@ class WeightCalculatorTest {
                     .setMount(Mount.TORSO_BACK));
         }
         return new InventoryAccess.Snapshot(saved.build(), slots, ground);
-    }
-
-    private static ByteString retired(String itemId) {
-        // 用真实灵草囊的编码改写物品 ID，得到注册表里已不存在的旧容器字节。
-        try {
-            var input = new DataInputStream(StackCodec.encode(ContainerItems.create(POUCH), TestRegistries.VANILLA).newInput());
-            var tag = NbtIo.read(input, NbtAccounter.unlimitedHeap());
-            tag.putString("id", itemId);
-            var bytes = new ByteArrayOutputStream();
-            NbtIo.write(tag, new DataOutputStream(bytes));
-            return ByteString.copyFrom(bytes.toByteArray());
-        } catch (IOException failure) {
-            throw new AssertionError(failure);
-        }
     }
 
     private static ItemStack filled(Identifier type, ItemStack child) {

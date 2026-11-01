@@ -4,16 +4,16 @@
 
 ## 2026-11-02：BS3D 移除草包、背篓、收纳箱
 
-BS3D 删除这三件容器，本仓随之删除 `grass_pouch`、`back_basket`、`storage_box` 三条内置重量规则（物品 ID 不存在时整份规则重载会失败）。BS3D 自带的九件 Bong 容器没有内置规则，按未命中计 100 g。旧存档里 BS3D 按损坏容器保留的三件旧容器，`WeightCalculator` 改为跳过不计重，不再使整份随身重量变为不可用；其他损坏数据仍整体拒绝。说明见[重量规则](Weight-Rules.md)。
+BS3D 删除这三件容器，本仓随之删除 `grass_pouch`、`back_basket`、`storage_box` 三条内置重量规则（物品 ID 不存在时整份规则重载会失败）。BS3D 自带的九件 Bong 容器没有内置规则，按未命中计 100 g。BS3D 不做旧存档兼容，三件的旧实例按损坏数据拒绝读取，本仓计重不做特判。说明见[重量规则](Weight-Rules.md)。
 
-单元测试与验收夹具改用灵草囊（`bs3d:herb_pouch`）和骨架背篓（`bs3d:gu_jia_bei_lou`）；骨架背篓内外尺寸相同，用于逐层自套的嵌套上限测试。Java 25 `test --rerun build :client:compileSmokeJava :server:compileSmokeJava` 通过：服务端 **28 项**、客户端 **5 项**，共 **33 项**，无失败或跳过；新增 1 项覆盖身上与容器内的旧容器跳过计重。日志为 `build/tabclean-test-build.log`。
+单元测试与验收夹具改用灵草囊（`bs3d:herb_pouch`）和骨架背篓（`bs3d:gu_jia_bei_lou`）；骨架背篓内外尺寸相同，用于逐层自套的嵌套上限测试。Java 25 `test --rerun build :client:compileSmokeJava :server:compileSmokeJava` 通过：服务端 **27 项**、客户端 **5 项**，共 **32 项**，无失败或跳过，用例数与 2026-11-01 相同。日志为 `build/retire-revert-test-build.log`。
 
 真实 Fabric 专服与 Xvfb 客户端两种模式均通过：
 
-- `build/smoke/7bf30655147c-dedicated/client/weights-ok.txt`
-- `build/smoke/0190ec84e8ee-integrated/client/weights-ok.txt`
+- `build/smoke/a099eed980db-dedicated/client/weights-ok.txt`
+- `build/smoke/a099eed980db-integrated/client/weights-ok.txt`
 
-覆盖项不变；两件 Bong 容器各按 100 g 计，预期值随之改为初始 4050 g、灵草囊转移后 2.1 kg、热重载后 7050 g，截图显示「实重 7.05 kg / 负重 4.1 kg」与「灵草囊 4.1 kg」。缺少字段告警的物品变为石头、骨架背篓和灵草囊。旧存档跳过计重只有单元测试，没有在游戏中加载旧世界验证。
+覆盖项不变；两件 Bong 容器各按 100 g 计，预期值随之改为初始 4050 g、灵草囊转移后 2.1 kg、热重载后 7050 g，截图显示「实重 7.05 kg / 负重 4.1 kg」与「灵草囊 4.1 kg」。缺少字段告警的物品变为石头、骨架背篓和灵草囊。
 
 ## 2026-11-01：迁移到 Minecraft 26.2 / Java 25
 
