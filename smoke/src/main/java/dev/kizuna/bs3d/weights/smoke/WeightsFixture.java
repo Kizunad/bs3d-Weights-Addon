@@ -32,6 +32,10 @@ import java.util.UUID;
 
 /** 只存在于 smoke 源集的服务器夹具，不进入生产 JAR。 */
 public final class WeightsFixture implements ModInitializer {
+    // BS3D 自带的 Bong 容器；本仓不为它们登记重量，按未命中规则各计 100 g。
+    private static final Identifier POUCH = Identifier.fromNamespaceAndPath("bs3d", "herb_pouch");
+    private static final Identifier BASKET = Identifier.fromNamespaceAndPath("bs3d", "gu_jia_bei_lou");
+
     @Override
     public void onInitialize() {
         // 单机与专用服务端共用夹具；数据始终由实际服务器玩家及库存事务创建。
@@ -66,8 +70,8 @@ public final class WeightsFixture implements ModInitializer {
             return;
         }
         var registries = player.registryAccess();
-        var pouch = filled(ContainerItems.POUCH, new ItemStack(Items.STONE), registries);
-        var basket = filled(ContainerItems.BASKET, pouch, registries);
+        var pouch = filled(POUCH, new ItemStack(Items.STONE), registries);
+        var basket = filled(BASKET, pouch, registries);
         var slots = account.inventory();
         for (int slot = 0; slot < slots.size(); slot++) {
             slots.set(slot, ItemStack.EMPTY);
@@ -75,7 +79,7 @@ public final class WeightsFixture implements ModInitializer {
         slots.set(0, new ItemStack(Items.STONE, 2));
         slots.set(1, basket);
         slots.set(2, new ItemStack(Items.GOLD_INGOT, 2));
-        var worn = ContainerItems.create(ContainerItems.POUCH);
+        var worn = ContainerItems.create(POUCH);
         var data = account.data().toBuilder()
                 .setRevision(1)
                 .addWorn(WornContainer.newBuilder()

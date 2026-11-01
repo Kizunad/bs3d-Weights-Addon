@@ -49,10 +49,10 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private static final long TIMEOUT_MILLIS = 240_000;
     private static final int SETTLE_TICKS = 15;
     private static final int DISCONNECT_SETTLE_TICKS = SETTLE_TICKS * 2;
-    // 随身树原有 5 kg，加上通过 optional 注册的两件 375 g 金锭。
-    private static final long INITIAL_TOTAL_GRAMS = 5750;
+    // 随身树原有 3.3 kg（三块石头与三件各 100 g 的 Bong 容器），加上通过 optional 注册的两件 375 g 金锭。
+    private static final long INITIAL_TOTAL_GRAMS = 4050;
     // 数据包重载只改变三块石头的重量，注册金锭的自重保持不变。
-    private static final long RELOADED_TOTAL_GRAMS = 8750;
+    private static final long RELOADED_TOTAL_GRAMS = 7050;
 
     private enum Stage {
         CONNECT,
@@ -171,7 +171,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                         .getId();
                 var stack = volume.stack(pouch);
                 String descriptionKey = ItemMetadata.of(stack).descriptionTranslationKey();
-                require(!descriptionKey.isEmpty(), "草包没有登记描述键");
+                require(!descriptionKey.isEmpty(), "灵草囊没有登记描述键");
                 String description = Component.translatable(descriptionKey).getString();
                 require(!description.equals(descriptionKey), "物品描述缺少当前语言资源");
                 require(stack.getTooltipLines(Item.TooltipContext.of(client.level), client.player, TooltipFlag.NORMAL).stream()
@@ -201,7 +201,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                         .filter(container -> container.getContainerId().equals(pouch))
                         .findFirst()
                         .orElseThrow();
-                if (detail.getTotalGrams() != 2250) {
+                if (detail.getTotalGrams() != 2100) {
                     return;
                 }
                 require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "容器间转移重复计重");
@@ -213,8 +213,8 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 if (weights.state().getTotalGrams() != RELOADED_TOTAL_GRAMS) {
                     return;
                 }
-                require(weights.summary().getString().contains("8.75 kg"), "显示没有使用服务端快照");
-                require(weights.container(pouch).getString().equals("4.25 kg"), "容器文字重量错误");
+                require(weights.summary().getString().contains("7.05 kg"), "显示没有使用服务端快照");
+                require(weights.container(pouch).getString().equals("4.1 kg"), "容器文字重量错误");
                 settle++;
                 if (settle < SETTLE_TICKS) {
                     return;

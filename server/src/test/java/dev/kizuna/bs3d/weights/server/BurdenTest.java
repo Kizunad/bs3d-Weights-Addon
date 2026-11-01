@@ -8,6 +8,7 @@ import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.Mount;
 import dev.kizuna.backpack3d.protocol.pb.VolumeProtocol.WornContainer;
 import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.backpack3d.service.TransferService;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -30,6 +31,7 @@ class BurdenTest {
     private static final int LAST_POCKET_SLOT = 17;
     private static final int HIDDEN_BY_POCKET_SLOT = 20;
     private static final int ARMOR_SLOT = 36;
+    private static final Identifier POUCH = Identifier.fromNamespaceAndPath("bs3d", "herb_pouch");
 
     @BeforeAll
     static void bootstrap() {
@@ -160,8 +162,8 @@ class BurdenTest {
     }
 
     private static ItemStack pouch(ItemStack child) {
-        // 草包内放一件普通物品，条目身份独立，尺寸取单位体积。
-        var stack = ContainerItems.create(ContainerItems.POUCH);
+        // 灵草囊内放一件普通物品，条目身份独立，尺寸取单位体积。
+        var stack = ContainerItems.create(POUCH);
         var contents = Item.newBuilder()
                 .setId(UUID.randomUUID().toString())
                 .setContainer(ContainerItems.identity(stack))
