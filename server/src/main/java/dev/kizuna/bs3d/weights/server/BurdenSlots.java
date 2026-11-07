@@ -43,7 +43,7 @@ record BurdenSlots(int mainEnd) {
         if (slot == Inventory.SLOT_OFFHAND) {
             return Optional.of(BurdenSource.OFFHAND);
         }
-        // 身体盔甲与鞍是坐骑用的装备槽，玩家正常穿不上；若有物品照计实重，但不属于任何有效负重来源。
-        return Optional.empty();
+        // 26.2 的身体盔甲和鞍也属于实际穿戴装备；即使常规 UI 不提供入口，存在的栈仍按装备计负重。
+        return Optional.of(BurdenSource.ARMOR);
     }
 }

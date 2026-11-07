@@ -9,3 +9,5 @@
 - [Protobuf 通信契约](Protocol.md)
 - [扩展边界与 API](Extension-Guide.md)
 - [验证记录](Validation.md)
+
+- [重量来源与待定清单](Weight-Catalog.md)

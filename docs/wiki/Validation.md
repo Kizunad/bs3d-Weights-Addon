@@ -124,3 +124,19 @@ smoke 在全新 `build/smoke/<run-id>-<mode>/` 创建世界，默认端口 25583
 本轮完整证据为 `build/smoke/164141707dc2-dedicated/`、`build/smoke/164141707dc2-integrated/`，两者 `client/weights-ok.txt` 均通过，客户端和独服正常保存退出。默认端口当时被其他进程占用，复验使用 `--port 25584`，保留原进程。三个仓库的 Wiki 检查通过；未启动或更新 Windows Native 实例。
 
 文档与构建入口见[安装指南](Getting-Started.md)。
+
+
+## 2026-11-03：穿搭与全部装备来源
+
+实现增加 BS3D 非容器穿搭根计重：套装、多甲层、多骨段仍只统计一个栈；
+跨手持、光标、穿戴和嵌套的重复实例拒绝整次计算。新生成而尚未分配 UUID 的穿搭只在读取副本初始化，
+已有但损坏的 UUID 不重建。人体四甲槽原有系数 1 不变，身体甲／鞍也使用 armor 来源。
+五件有来源容器的 JSON 可由固定 Bong 导入脚本重现，其余缺项见[重量来源](Weight-Catalog.md)。
+
+最终组合构建已通过服务端 34、客户端 5 项 JUnit；Gear 专用服务器的生产 Weights API
+遍历 14 件穿搭及全部 10 件容器／腰带，穿脱保持实际重量、穿戴和副手都进入有效负重。
+新增初始化边界与自定义系数用例也已通过；Gear 无 PA 的 10 项 GameTest 完整通过，
+日志为 `/home/kiz/Code-gear/gear-g2-final.log`（`BUILD SUCCESSFUL in 1m 10s`，退出码 0）。
+Burden 真实服务器验证四甲槽、身体甲及鞍进入 Human 倍率，原有 70 kg 行走疲劳仍约为 2 倍。
+
+本轮没有改变客户端渲染，不重跑截图 smoke；未验证 Windows、多人真实鼠标操作和最终平衡克数。
