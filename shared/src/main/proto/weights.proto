@@ -11,7 +11,7 @@ message WeightState {
   string session = 1; // Framework 连接身份；换世界或重连后变化。
   int64 revision = 2; // 本连接单调递增，与 BS3D 库存修订号独立。
   Status status = 3;
-  int64 total_grams = 4; // 原版库存（含盔甲/副手）、光标栈与穿戴根容器重量；不含地面容器。
+  int64 total_grams = 4; // 原版库存（含盔甲/副手）、光标栈与穿戴根容器重量，潜影盒、收纳袋的内容计入所在物品；不含地面容器。
   repeated ContainerWeight containers = 5;
   int64 effective_grams = 6; // 按服务端 burden.toml 系数加权的有效负重；Weights 只计数，不据此限制玩家。
 }
@@ -25,7 +25,7 @@ enum Status {
 message ContainerWeight {
   string container_id = 1; // 容器实例 UUID，不是注册物品类型 ID。
   string title = 2; // 服务端物品展示名。
-  int64 contents_grams = 3; // 包含嵌套容器自重及内容。
+  int64 contents_grams = 3; // 包含嵌套容器、潜影盒和收纳袋的自重及内容。
   int64 total_grams = 4; // 此容器自重 + contents_grams。
   bool carried = 5; // 地面容器及其子容器为 false，不计入随身总重。
 }
