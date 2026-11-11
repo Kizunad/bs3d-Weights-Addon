@@ -49,10 +49,13 @@ public final class WeightsSmokeClient implements ClientModInitializer {
     private static final long TIMEOUT_MILLIS = 240_000;
     private static final int SETTLE_TICKS = 15;
     private static final int DISCONNECT_SETTLE_TICKS = SETTLE_TICKS * 2;
-    // 随身树原有 3.3 kg（三块石头与三件各 100 g 的 Bong 容器），加上通过 optional 注册的两件 375 g 金锭。
-    private static final long INITIAL_TOTAL_GRAMS = 4050;
+    // 随身树原有 3.7 kg（三块 1 kg 石头、两只内置规则 300 g 的灵草囊、一只未命中计 100 g 的骨架背篓），
+    // 加上通过 optional 注册的两件 375 g 金锭。
+    private static final long INITIAL_TOTAL_GRAMS = 4450;
     // 数据包重载只改变三块石头的重量，注册金锭的自重保持不变。
-    private static final long RELOADED_TOTAL_GRAMS = 7050;
+    private static final long RELOADED_TOTAL_GRAMS = 7450;
+    // 腰上的灵草囊自重 300 g，转进两块 1 kg 石头后的明细。
+    private static final long POUCH_AFTER_DEPOSIT_GRAMS = 2300;
 
     private enum Stage {
         CONNECT,
@@ -201,7 +204,7 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                         .filter(container -> container.getContainerId().equals(pouch))
                         .findFirst()
                         .orElseThrow();
-                if (detail.getTotalGrams() != 2100) {
+                if (detail.getTotalGrams() != POUCH_AFTER_DEPOSIT_GRAMS) {
                     return;
                 }
                 require(weights.state().getTotalGrams() == INITIAL_TOTAL_GRAMS, "容器间转移重复计重");
@@ -213,8 +216,8 @@ public final class WeightsSmokeClient implements ClientModInitializer {
                 if (weights.state().getTotalGrams() != RELOADED_TOTAL_GRAMS) {
                     return;
                 }
-                require(weights.summary().getString().contains("7.05 kg"), "显示没有使用服务端快照");
-                require(weights.container(pouch).getString().equals("4.1 kg"), "容器文字重量错误");
+                require(weights.summary().getString().contains("7.45 kg"), "显示没有使用服务端快照");
+                require(weights.container(pouch).getString().equals("4.3 kg"), "容器文字重量错误");
                 settle++;
                 if (settle < SETTLE_TICKS) {
                     return;

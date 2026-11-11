@@ -32,7 +32,7 @@ import java.util.UUID;
 
 /** 只存在于 smoke 源集的服务器夹具，不进入生产 JAR。 */
 public final class WeightsFixture implements ModInitializer {
-    // BS3D 自带的 Bong 容器；本仓不为它们登记重量，按未命中规则各计 100 g。
+    // BS3D 自带的 Bong 容器；灵草囊有本仓内置规则 300 g，骨架背篓没有，按未命中计 100 g。
     private static final Identifier POUCH = Identifier.fromNamespaceAndPath("bs3d", "herb_pouch");
     private static final Identifier BASKET = Identifier.fromNamespaceAndPath("bs3d", "gu_jia_bei_lou");
 

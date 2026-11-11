@@ -44,7 +44,7 @@ public final class WeightsServer implements ModInitializer, FabricServerModule {
     public void register(MinecraftServer server, ServerModuleRegistry<ServerPlayer> registry) {
         // 工厂只创建会话，订阅请求到达后才读取真实玩家并发送状态。
         registry.register(WeightMessages.MODULE, WeightMessages.capabilities(), connection -> {
-            var session = new WeightSession(server, connection, calculator());
+            var session = new WeightSession(server, connection);
             SESSIONS.add(session);
             return session;
         });
@@ -57,6 +57,11 @@ public final class WeightsServer implements ModInitializer, FabricServerModule {
             throw new IllegalStateException("重量附属尚未初始化");
         }
         return current;
+    }
+
+    static long rulesRevision() {
+        // 数据包重载换了规则，库存没变也要重算。
+        return RULES.revision();
     }
 
     static void forget(WeightSession session) {

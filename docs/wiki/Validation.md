@@ -2,6 +2,28 @@
 
 状态：2026-10-14 初版源码，尚未发布版本；配套基础源码已公开，兼容提交见[安装指南](Getting-Started.md)。
 
+## 2026-11-12：订阅推送与 Burden 共用读数
+
+已实现：每名玩家一份重量读数（`WeightReadings`），订阅推送和 `Burden` 都读它，每 5 个服务端 tick 才重读一次库存。重读时库存快照、光标、注册表和规则版本（`WeightRules.revision`，每次重载加一）逐项和上次相同，就沿用上次结果，不重新遍历容器树。之前会话和 `Burden` 各自按 5 tick 全量算，同一玩家一个间隔里最多算两遍。计算方法没变。
+
+已验证：
+
+- 新增服务端测试类 `WeightReadingTest` 4 项：间隔内不读库存；内容相同、对象不同的快照不重算；主库存数量、潜影盒内容、光标、穿戴、地面容器、规则版本、注册表任一变化都重算，总重按变化变；光标留存副本。
+- Java 25 `test build :client:compileSmokeJava :server:compileSmokeJava` 通过：服务端 **49 项**、客户端 **5 项**，无失败或跳过。
+- 把比较改成不看规则版本，`anyChangedInputRecalculates` 失败；还原后通过。
+- 临时基准（不进仓）：库存没变时，原来每 5 tick 的一遍计算（背篓 100 件约 71 µs，近上限 4000 栈约 160–250 µs）变成一次比较（0.06–0.35 µs）；计算本身前后在噪声内。
+- Xvfb smoke：见下段。
+
+未验证：Kizuna Meridian Burden 附属的 `test build :fabric:runGametest` 本轮没跑（它按源码组合 Framework 与 Human，那两仓另有在途改动）；Burden 读的两个方法签名和语义不变。BS3D 每 5 tick 的库存快照本身的耗时没测。
+
+Xvfb smoke：这轮发现 smoke 自 2026-11-07 起就过不了，改动前的 07c301e 同样在 `INITIAL_STATE` 超时。原因是 94b1b80 给灵草囊加了 300 g 内置规则，夹具里两只灵草囊从各 100 g 变成各 300 g，smoke 客户端还在等旧的 4050 g。期望值随之改为初始 4450 g、灵草囊转移后 2.3 kg、热重载后 7450 g，显示文字「7.45 kg」「4.3 kg」，覆盖项不变。改完后专服与单机两种模式均通过，截图显示「实重 7.45 kg / 负重 4.3 kg」与「灵草囊 4.3 kg」。
+
+本机 WSLg 默认走 D3D12 显卡驱动时，客户端在验收通过、`client.stop()` 之后会在原生线程 SIGSEGV 退出（退出码 134），smoke 因此判失败；只关 OpenAL 不够。带 `LIBGL_ALWAYS_SOFTWARE=1`（本轮同时带了 `ALSOFT_DRIVERS=null`）改用 llvmpipe 后两种模式正常退出：
+
+```bash
+ALSOFT_DRIVERS=null LIBGL_ALWAYS_SOFTWARE=1 python3 scripts/smoke.py --java-home <Java 25>
+```
+
 ## 2026-11-11：原版潜影盒与收纳袋计重
 
 计重递归展开物品上的原版 `minecraft:container`、`minecraft:bundle_contents` 组件，规则与上限见[重量规则](Weight-Rules.md)。之前一盒铁块和空盒一样重。

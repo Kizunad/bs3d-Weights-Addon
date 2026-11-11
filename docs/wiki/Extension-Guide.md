@@ -4,7 +4,7 @@
 
 `InventoryAccess.snapshot(ServerPlayer)` 只允许在逻辑服务器主线程调用。返回穿戴存档、原版槽位栈副本（26.2 为 43 格，含身体盔甲与鞍）和当前已获准打开的地面根容器副本；不返回可提交的事务对象。所有权与地面距离检查仍由 BS3D 实施。光标栈从当前服务端玩家的 AbstractContainerMenu 读取。
 
-`Burden.effectiveGrams(ServerPlayer)` 与 `Burden.totalGrams(ServerPlayer)` 位于 `dev.kizuna.bs3d.weights.server`，供其他服务端附属读取有效负重和随身实重。2026-10-30 源码已实现，计算由单元测试覆盖，API 尚未冻结。两者单位为克，返回 `OptionalLong`；库存损坏或有效负重溢出时为空，由调用方决定回退。只允许在逻辑服务器主线程调用，其他线程抛出 `IllegalStateException`。每名玩家每 5 个服务端 tick 最多重算一次，与订阅推送节奏相同，期间复用上次结果。系数见[有效负重系数](Weight-Rules.md)。本附属不据此限制玩家；调用方在 `fabric.mod.json` 依赖 `bs3d_weights_addon`，并按运行端引用对应的 Weights JAR 编译。
+`Burden.effectiveGrams(ServerPlayer)` 与 `Burden.totalGrams(ServerPlayer)` 位于 `dev.kizuna.bs3d.weights.server`，供其他服务端附属读取有效负重和随身实重。2026-10-30 源码已实现，计算由单元测试覆盖，API 尚未冻结。两者单位为克，返回 `OptionalLong`；库存损坏或有效负重溢出时为空，由调用方决定回退。只允许在逻辑服务器主线程调用，其他线程抛出 `IllegalStateException`。每名玩家每 5 个服务端 tick 最多读一次库存，和订阅推送共用同一份读数，期间复用上次结果；重读时库存、光标和重量规则都没变就不重算（2026-11-12 起，见[验证记录](Validation.md)）。系数见[有效负重系数](Weight-Rules.md)。本附属不据此限制玩家；调用方在 `fabric.mod.json` 依赖 `bs3d_weights_addon`，并按运行端引用对应的 Weights JAR 编译。
 
 本附属只有一处可选模组检测：`BurdenSlots.detect()` 按 `bs3d_pocket`（用户自定义的可选 Pocket JAR）是否加载，选择有效负重的主库存范围（未安装为 9–35 号槽，安装后为 9–17 号槽）。检测只看模组 ID，两种范围都是本仓常量，不反射读取 Pocket 的类。BS3D 与 Kizuna Inventory UI Framework 等其余依赖都是硬依赖，不写缺依赖时的降级分支；新增可选检测前须先改本节。
 

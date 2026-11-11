@@ -1,8 +1,6 @@
 package dev.kizuna.bs3d.weights.server;
 
-import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.bs3d.weights.protocol.WeightMessages;
-import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.Status;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.SubscribeRequest;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.WeightState;
 import dev.kizuna.inventoryui.server.ServerConnection;
@@ -10,27 +8,18 @@ import dev.kizuna.inventoryui.server.ServerModuleSession;
 import dev.kizuna.inventoryui.server.ServerRequest;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-import java.io.UncheckedIOException;
 
 /** 每连接独立订阅、去重和修订号，断线后不保留旧世界数据。 */
 final class WeightSession implements ServerModuleSession<ServerPlayer> {
-    private static final Logger LOGGER = LoggerFactory.getLogger("bs3d_weights");
-    // 20 TPS 下最多每 250 ms 检查一次；未变化的结果不发包。Burden API 沿用同一间隔。
-    static final int UPDATE_INTERVAL_TICKS = 5;
     private final MinecraftServer server;
     private final ServerConnection<ServerPlayer> connection;
-    private final WeightCalculator calculator;
     private WeightState previous;
     private long revision;
-    private int elapsedTicks;
     private boolean subscribed;
 
-    WeightSession(MinecraftServer server, ServerConnection<ServerPlayer> connection, WeightCalculator calculator) {
+    WeightSession(MinecraftServer server, ServerConnection<ServerPlayer> connection) {
         this.server = server;
         this.connection = connection;
-        this.calculator = calculator;
     }
 
     MinecraftServer server() {
@@ -55,31 +44,17 @@ final class WeightSession implements ServerModuleSession<ServerPlayer> {
 
     void tick() {
         // 使用服务端 tick，不受客户端帧率影响；暂停的单机不需要更新静止库存。
+        // 每 tick 只取共用读数：读数表按间隔才读库存，间隔内拿到的是同一个结果对象，比较不花钱；
+        // 读数一刷新就推，变化最多晚一个间隔送到。
         if (!subscribed) {
             return;
         }
-        elapsedTicks++;
-        if (elapsedTicks < UPDATE_INTERVAL_TICKS) {
-            return;
-        }
-        elapsedTicks = 0;
         publish(false);
     }
 
     private void publish(boolean force) {
-        // 先完整计算，再去重并发布；主动订阅必须收到一份当前快照。
-        var player = connection.context();
-        WeightState next;
-        try {
-            // 屏幕光标也是玩家携带的真实栈，拿起原版物品时总重不能临时消失。
-            next = calculator.calculate(
-                    InventoryAccess.snapshot(player), player.containerMenu.getCarried(), player.registryAccess());
-        } catch (IllegalArgumentException | ArithmeticException | UncheckedIOException invalid) {
-            next = WeightState.newBuilder().setStatus(Status.INVALID_INVENTORY).build();
-            if (previous == null || previous.getStatus() != Status.INVALID_INVENTORY) {
-                LOGGER.warn("玩家 {} 的重量暂不可用", player.getUUID(), invalid);
-            }
-        }
+        // 先取这名玩家的完整读数，再去重并发布；主动订阅必须收到一份快照。
+        WeightState next = WeightReadings.read(connection.context());
         if (!force && next.equals(previous)) {
             return;
         }

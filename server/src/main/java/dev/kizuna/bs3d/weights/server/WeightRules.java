@@ -30,6 +30,8 @@ public final class WeightRules implements ResourceManagerReloadListener {
     // 按物品类型缓存注册字段解析结果；资源重载可在工作线程执行，因此缓存支持并发清理。
     private final Map<Item, OptionalLong> registeredWeights = new ConcurrentHashMap<>();
     private volatile List<WeightRule> rules = List.of();
+    // 每次重载成功加一；重量读数据此判断上次结果是不是按旧规则算的。只有重载一处写入。
+    private volatile long revision;
 
     @Override
     public void onResourceManagerReload(ResourceManager resources) {
@@ -44,6 +46,12 @@ public final class WeightRules implements ResourceManagerReloadListener {
                 .thenComparing(WeightRule::resource));
         rules = List.copyOf(next);
         registeredWeights.clear();
+        revision = revision + 1;
+    }
+
+    /** 规则版本：每次重载成功后变化，库存没变也要按新规则重算。 */
+    public long revision() {
+        return revision;
     }
 
     private static WeightRule read(Identifier id, Resource resource) {
