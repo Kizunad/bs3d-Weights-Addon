@@ -1,7 +1,7 @@
 package dev.kizuna.bs3d.weights.server;
 
 /** 有效负重的计重来源；配置键与 burden.toml 一一对应。 */
-enum BurdenSource {
+public enum BurdenSource {
     HOTBAR("hotbar"),
     MAIN("main"),
     ARMOR("armor"),

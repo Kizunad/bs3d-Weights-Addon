@@ -20,6 +20,49 @@ loom.runs {
         source sourceSets.smoke
         runDir "../build/smoke/${rootProject.findProperty('smokeRun') ?: 'manual'}/server"
         property 'weights.smoke.mode', 'dedicated'
+        if (rootProject.hasProperty('smokeMeasure')) {
+            property 'weights.smoke.measure', 'true'
+        }
         programArg 'nogui'
+    }
+}
+
+// 无客户端的算重检查复用 smoke 专服，每次用独立目录，成功标记必须由本次运行生成。
+def measureRun = rootProject.findProperty('smokeRun') ?: 'manual'
+def measureDirectory = rootProject.file("build/smoke/${measureRun}/server")
+tasks.register('prepareMeasureSmoke') {
+    onlyIf { rootProject.hasProperty('smokeMeasure') }
+    doLast {
+        if (!(measureRun ==~ /[A-Za-z0-9_-]+/) || measureRun == 'manual') {
+            throw new GradleException('算重 smoke 必须用 -PsmokeRun 指定新的独立目录名')
+        }
+        if (new File(measureDirectory, 'eula.txt').exists() || new File(measureDirectory, 'world').exists()) {
+            throw new GradleException("算重 smoke 目录已存在，请更换 smokeRun：${measureDirectory}")
+        }
+        measureDirectory.mkdirs()
+        new File(measureDirectory, 'eula.txt').text = 'eula=true\n'
+        new File(measureDirectory, 'server.properties').text = '''server-ip=127.0.0.1
+server-port=0
+online-mode=false
+view-distance=2
+simulation-distance=2
+max-players=1
+spawn-protection=0
+level-type=minecraft:flat
+generate-structures=false
+difficulty=peaceful
+generator-settings={"layers":[{"block":"minecraft:bedrock","height":1}],"biome":"minecraft:plains"}
+'''
+    }
+}
+tasks.named('runSmoke') {
+    dependsOn 'prepareMeasureSmoke'
+    doLast {
+        if (rootProject.hasProperty('smokeMeasure')) {
+            def marker = new File(measureDirectory, 'weights-measure-ok.txt')
+            if (!marker.isFile() || marker.text.trim() != 'WEIGHTS_MEASURE_OK cases=5') {
+                throw new GradleException('算重 smoke 未通过，缺少完整成功标记，请检查 WEIGHTS_MEASURE_FAILED')
+            }
+        }
     }
 }

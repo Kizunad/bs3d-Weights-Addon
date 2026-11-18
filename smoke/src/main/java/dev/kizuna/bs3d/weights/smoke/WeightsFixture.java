@@ -42,6 +42,10 @@ public final class WeightsFixture implements ModInitializer {
         var weight = new JsonObject();
         weight.addProperty("grams", 375);
         ItemMetadata.register(Items.GOLD_INGOT, "", Map.of(WeightRules.WEIGHT_FIELD, weight));
+        if (Boolean.getBoolean("weights.smoke.measure")) {
+            MeasureSmoke.register();
+            return;
+        }
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> seedInventory(handler.player));
         CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> {
             dispatcher.register(Commands.literal("weights-fixture-reload")

@@ -2,6 +2,39 @@
 
 状态：2026-10-14 初版源码，尚未发布版本；配套基础源码已公开，兼容提交见[安装指南](Getting-Started.md)。
 
+## 2026-11-18：不依赖玩家的根清单算重
+
+新增 `CarriedStack`、公开 `BurdenSource`，`Burden.measure(ServerLevel, List<CarriedStack>)` 使用当前规则及
+同一份来源系数即时计算。玩家与根清单共用根遍历、递归、身份集合、上限和逐来源舍入；玩家五 tick 读数缓存保留。
+状态、线程及完整槽映射见[扩展边界与 API](Extension-Guide.md)。
+
+已验证：
+
+- 经 `kz test <Weights 工作树> --srv -- :server:compileSmokeJava :client:compileSmokeJava`，
+  服务端 **63 项**、客户端 **5 项**单测及构建通过，无失败或跳过。新增 `CarriedStacksTest` **14 项**覆盖来源舍入、
+  玩家适配与根适配完整等价、18 格加独立主手、潜影盒／收纳袋／BS3D 递归、身份重复、两类深度、访问／身份数量、
+  溢出、损坏及空身状态、即时读取、输入不变和 null 参数。
+- 在已有 `smoke` 源集中增加专服算重模式，通过
+  `kz gradle <Weights 工作树> --srv -- :server:runSmoke -PsmokeMeasure -PsmokeRun=<新的独立目录名>`
+  运行，**五组检查全部通过**：当前注册／数据包规则及即时读取，真实 `ServerPlayer` 库存与公共根入口等价，
+  无效／零克区分，参数错误，非主线程拒绝。玩家主手、BODY、SADDLE 和同 tick 缓存包含在等价检查中。
+- smoke 自动保存停服，Gradle 核对完整成功标记；故意去掉线程检查后，该检查和 Gradle 均失败。
+  不新增 GameTest 源集，不要求修改 Framework 装配清单，也不使用直接启动 Gradle 的旧 `scripts/smoke.py`。
+- 九组负对照全部命中对应断言：逐栈舍入、不递归原版盒子、重复累计独立主手、忽略实例重复、忽略 BS3D 深度、
+  忽略访问预算、无效状态伪装 OK、截断溢出、跳过服务器线程检查。每组还原后源码字节、完整 diff 和改动文件哈希一致；
+  还原后的全量及正常专服 smoke 再次通过。
+- 下游 Pocket 带本次 Weights 工作树全量通过：**13 项单测**（服务端 7、客户端 6）；
+  Burden 同样带本树通过 **16 项单测、12 项 GameTest**；Human 同样带本树通过
+  **115 项单测、141 项 GameTest**，均无失败或跳过。Weights、Pocket、Burden 走 srv；Human 在同仓锁排队后取消尚未启动的
+  srv 任务，改用本机 `kz test <Human 主目录> --with <Weights 工作树>` 完成全量。
+
+覆盖边界：专服测试创建实际 `ServerPlayer`，使用原版库存及 BS3D 存储 mixin，但不模拟联网客户端登录；
+本轮未重跑原来的 Xvfb 客户端／单机 UI smoke。新生物背囊仓的实物交换与根映射仍由其接入步骤验收，
+不把本仓“18 格加主手”夹具称为新仓行为已经验证。Weights／Pocket 当前装配清单没有 GameTest，
+它们的全量命令通过仅表示已登记的单测与构建通过。
+
+日志及按字节还原证据由工作区 `handoff/inventory-33-20261118/logs/w1-*` 保存；尚未发布版本。
+
 ## 2026-11-12：订阅推送与 Burden 共用读数
 
 已实现：每名玩家一份重量读数（`WeightReadings`），订阅推送和 `Burden` 都读它，每 5 个服务端 tick 才重读一次库存。重读时库存快照、光标、注册表和规则版本（`WeightRules.revision`，每次重载加一）逐项和上次相同，就沿用上次结果，不重新遍历容器树。之前会话和 `Burden` 各自按 5 tick 全量算，同一玩家一个间隔里最多算两遍。计算方法没变。

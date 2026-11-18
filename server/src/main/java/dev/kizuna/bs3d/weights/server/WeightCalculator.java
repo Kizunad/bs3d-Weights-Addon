@@ -7,12 +7,15 @@ import dev.kizuna.backpack3d.server.InventoryAccess;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.ContainerWeight;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.Status;
 import dev.kizuna.bs3d.weights.protocol.pb.WeightsProtocol.WeightState;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.ToLongFunction;
 import net.minecraft.core.HolderLookup;
@@ -45,15 +48,50 @@ public final class WeightCalculator {
 
     public WeightState calculate(InventoryAccess.Snapshot inventory, ItemStack cursor,
                                  HolderLookup.Provider registries) {
-        // 每次计算使用独立遍历状态；损坏树必须抛错，不能发布看似正常的部分总重。
-        // 容器内容按数据组件保存，解码须用玩家所在服务器的注册表。
+        // 玩家适配保留隐藏槽实重、光标、穿戴和地面明细，底层错误交给玩家读数层处理。
+        var roots = new ArrayList<Root>();
+        addPlayerRoots(roots, inventory.playerSlots());
+        roots.add(Root.carried(cursor, BurdenSource.CURSOR));
+        addWornRoots(roots, inventory, registries);
+        addGroundRoots(roots, inventory);
+        return calculateRoots(roots, registries);
+    }
+
+    WeightState measure(List<CarriedStack> roots, HolderLookup.Provider registries) {
+        // 参数错误不属于坏库存；只在复制和计算期间把已有库存异常转成不可用状态。
+        List<CarriedStack> checkedRoots = List.copyOf(roots);
+        Objects.requireNonNull(registries, "registries");
+        try {
+            return calculateRoots(copyCarriedRoots(checkedRoots), registries);
+        } catch (IllegalArgumentException | ArithmeticException | UncheckedIOException invalid) {
+            return WeightState.newBuilder()
+                    .setStatus(Status.INVALID_INVENTORY)
+                    .build();
+        }
+    }
+
+    private static List<Root> copyCarriedRoots(List<CarriedStack> roots) {
+        // 所有根先取副本；副本保留实例身份，跨根重复仍由同一次 Walk 拒绝。
+        var copied = new ArrayList<Root>();
+        for (var root : roots) {
+            copied.add(Root.carried(root.stack().copy(), root.source()));
+        }
+        return copied;
+    }
+
+    private WeightState calculateRoots(List<Root> roots, HolderLookup.Provider registries) {
+        // 两种入口共用整个根遍历，身份集合、访问预算和来源汇总都只在此次计算内创建一次。
         var walk = new Walk(registries);
-        carryPlayer(walk, inventory.playerSlots());
-        walk.carry(cursor, BurdenSource.CURSOR);
-        carryWorn(walk, inventory, registries);
-        // 地面容器仅产生明细，其子树沿用地面来源，不能混入随身总重。
-        for (var stack : inventory.ground().values()) {
-            walk.stack(stack, Location.GROUND, Nesting.ROOT);
+        for (var root : roots) {
+            var source = root.source();
+            var stack = root.stack();
+            if (root.location() == Location.GROUND) {
+                walk.stack(stack, Location.GROUND, Nesting.ROOT);
+            } else if (source.isPresent()) {
+                walk.carry(stack, source.get());
+            } else {
+                walk.carry(stack);
+            }
         }
         walk.containers.sort(Comparator.comparing(ContainerWeight::getContainerId));
         return WeightState.newBuilder()
@@ -64,28 +102,40 @@ public final class WeightCalculator {
                 .build();
     }
 
-    private void carryPlayer(Walk walk, List<ItemStack> playerSlots) {
+    private void addPlayerRoots(List<Root> roots, List<ItemStack> playerSlots) {
         // 原版槽号决定来源；Pocket 隐藏的旧槽仍保留实重。
         for (int slot = 0; slot < playerSlots.size(); slot++) {
             var stack = playerSlots.get(slot);
             var source = slots.source(slot);
-            if (source.isPresent()) {
-                walk.carry(stack, source.get());
-            } else {
-                walk.carry(stack);
-            }
+            roots.add(new Root(stack, Location.CARRIED, source));
         }
     }
 
-    private static void carryWorn(Walk walk, InventoryAccess.Snapshot inventory, HolderLookup.Provider registries) {
+    private static void addWornRoots(List<Root> roots, InventoryAccess.Snapshot inventory,
+                                     HolderLookup.Provider registries) {
         // 保存根代表真实物品，外观目录不参与计重。
         var equipment = inventory.equipment();
         for (var worn : equipment.getWornList()) {
-            walk.carry(StackCodec.decode(worn.getStackNbt(), registries), BurdenSource.WORN_CONTAINERS);
+            var stack = StackCodec.decode(worn.getStackNbt(), registries);
+            roots.add(Root.carried(stack, BurdenSource.WORN_CONTAINERS));
         }
         for (var worn : equipment.getWornWearablesList()) {
             // 每个穿搭根只有一件真实栈；骨段、甲层和成套部件都不是额外物品。
-            walk.carry(StackCodec.decode(worn.getStackNbt(), registries), BurdenSource.ARMOR);
+            var stack = StackCodec.decode(worn.getStackNbt(), registries);
+            roots.add(Root.carried(stack, BurdenSource.ARMOR));
+        }
+    }
+
+    private static void addGroundRoots(List<Root> roots, InventoryAccess.Snapshot inventory) {
+        // 地面容器参与明细和身份检查，但不进入任一种随身重量。
+        for (var stack : inventory.ground().values()) {
+            roots.add(new Root(stack, Location.GROUND, Optional.empty()));
+        }
+    }
+
+    private record Root(ItemStack stack, Location location, Optional<BurdenSource> source) {
+        private static Root carried(ItemStack stack, BurdenSource source) {
+            return new Root(stack, Location.CARRIED, Optional.of(source));
         }
     }
 
