@@ -3,6 +3,13 @@
   "id": "bs3d_weights_addon",
   "version": "${version}",
   "name": "BS3D Weights Addon",
+  "description": "Shows the weight of carried items and the combined weight of each bag and its contents.\n显示玩家随身总重，以及每个背包连同包内物品的重量。",
+  "contact": {
+    "homepage": "https://github.com/Kizunad/bs3d-Weights-Addon",
+    "sources": "https://github.com/Kizunad/bs3d-Weights-Addon",
+    "issues": "https://github.com/Kizunad/bs3d-Weights-Addon/issues"
+  },
+  "icon": "assets/bs3d_weights_addon/icon.png",
   "environment": "server",
   "authors": [
     "Kizunad"
@@ -21,7 +28,7 @@
     "minecraft": "26.2",
     "fabricloader": ">=0.20.1",
     "fabric-api": ">=0.161.0+26.2",
-    "backpack_storage_3d": "0.1.0-SNAPSHOT",
-    "kizuna_inventory_ui_server": "0.1.0-SNAPSHOT"
+    "backpack_storage_3d": "0.1.0",
+    "kizuna_inventory_ui_server": "0.1.0"
   }
 }
